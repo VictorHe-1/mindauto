@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import inspect
 import os
-import os.path as osp
+from os import path as osp
 import re
 import tempfile
 import warnings

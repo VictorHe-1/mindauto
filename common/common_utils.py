@@ -9,7 +9,7 @@ import cv2
 from cv2 import (IMREAD_COLOR, IMREAD_GRAYSCALE, IMREAD_IGNORE_ORIENTATION,
                  IMREAD_UNCHANGED)
 import os
-import os.path as osp
+from os import path as osp
 from pathlib import Path
 
 try:
@@ -781,7 +781,7 @@ def imfrombytes(content, flag='color', channel_order='bgr', backend=None):
     if backend not in supported_backends:
         raise ValueError(f'backend: {backend} is not supported. Supported '
                          "backends are 'cv2', 'turbojpeg', 'pillow'")
-    use_backend()
+    use_backend(backend)
     if backend == 'turbojpeg':
         img = jpeg.decode(content, _jpegflag(flag, channel_order))
         if img.shape[-1] == 1:
@@ -870,3 +870,107 @@ def is_list_of(seq, expected_type):
     A partial method of :func:`is_seq_of`.
     """
     return is_seq_of(seq, expected_type, seq_type=list)
+
+
+def imwrite(img, file_path, params=None, auto_mkdir=True):
+    """Write image to file.
+
+    Args:
+        img (ndarray): Image array to be written.
+        file_path (str): Image file path.
+        params (None or list): Same as opencv :func:`imwrite` interface.
+        auto_mkdir (bool): If the parent folder of `file_path` does not exist,
+            whether to create it automatically.
+
+    Returns:
+        bool: Successful or not.
+    """
+    if auto_mkdir:
+        dir_name = osp.abspath(osp.dirname(file_path))
+        mkdir_or_exist(dir_name)
+    return cv2.imwrite(file_path, img, params)
+
+
+def imshow(img, win_name='', wait_time=0):
+    """Show an image.
+
+    Args:
+        img (str or ndarray): The image to be displayed.
+        win_name (str): The window name.
+        wait_time (int): Value of waitKey param.
+    """
+    cv2.imshow(win_name, imread(img))
+    if wait_time == 0:  # prevent from hanging if windows was closed
+        while True:
+            ret = cv2.waitKey(1)
+
+            closed = cv2.getWindowProperty(win_name, cv2.WND_PROP_VISIBLE) < 1
+            # if user closed window or if some key pressed
+            if closed or ret != -1:
+                break
+    else:
+        ret = cv2.waitKey(wait_time)
+
+
+def imread(img_or_path, flag='color', channel_order='bgr', backend=None):
+    """Read an image.
+
+    Args:
+        img_or_path (ndarray or str or Path): Either a numpy array or str or
+            pathlib.Path. If it is a numpy array (loaded image), then
+            it will be returned as is.
+        flag (str): Flags specifying the color type of a loaded image,
+            candidates are `color`, `grayscale`, `unchanged`,
+            `color_ignore_orientation` and `grayscale_ignore_orientation`.
+            By default, `cv2` and `pillow` backend would rotate the image
+            according to its EXIF info unless called with `unchanged` or
+            `*_ignore_orientation` flags. `turbojpeg` and `tifffile` backend
+            always ignore image's EXIF info regardless of the flag.
+            The `turbojpeg` backend only supports `color` and `grayscale`.
+        channel_order (str): Order of channel, candidates are `bgr` and `rgb`.
+        backend (str | None): The image decoding backend type. Options are
+            `cv2`, `pillow`, `turbojpeg`, `tifffile`, `None`.
+            If backend is None, the global imread_backend specified by
+            ``mmcv.use_backend()`` will be used. Default: None.
+
+    Returns:
+        ndarray: Loaded image array.
+    """
+
+    if backend is None:
+        backend = imread_backend
+    if backend not in supported_backends:
+        raise ValueError(f'backend: {backend} is not supported. Supported '
+                         "backends are 'cv2', 'turbojpeg', 'pillow'")
+    if isinstance(img_or_path, Path):
+        img_or_path = str(img_or_path)
+
+    if isinstance(img_or_path, np.ndarray):
+        return img_or_path
+    elif is_str(img_or_path):
+        check_file_exist(img_or_path,
+                         f'img file does not exist: {img_or_path}')
+        use_backend(backend)
+        if backend == 'turbojpeg':
+            with open(img_or_path, 'rb') as in_file:
+                img = jpeg.decode(in_file.read(),
+                                  _jpegflag(flag, channel_order))
+                if img.shape[-1] == 1:
+                    img = img[:, :, 0]
+            return img
+        elif backend == 'pillow':
+            img = Image.open(img_or_path)
+            img = _pillow2array(img, flag, channel_order)
+            return img
+        elif backend == 'tifffile':
+            img = tifffile.imread(img_or_path)
+            return img
+        else:
+            flag = imread_flags[flag] if is_str(flag) else flag
+            img = cv2.imread(img_or_path, flag)
+            if flag == IMREAD_COLOR and channel_order == 'rgb':
+                cv2.cvtColor(img, cv2.COLOR_BGR2RGB, img)
+            return img
+    else:
+        raise TypeError('"img" must be a numpy array or a str or '
+                        'a pathlib.Path object')
