@@ -4,6 +4,7 @@ import yaml
 import numbers
 import pickle
 import numpy as np
+from collections import abc
 import cv2
 from cv2 import (IMREAD_COLOR, IMREAD_GRAYSCALE, IMREAD_IGNORE_ORIENTATION,
                  IMREAD_UNCHANGED)
@@ -52,8 +53,9 @@ imread_flags = {
     'unchanged': IMREAD_UNCHANGED,
     'color_ignore_orientation': IMREAD_IGNORE_ORIENTATION | IMREAD_COLOR,
     'grayscale_ignore_orientation':
-    IMREAD_IGNORE_ORIENTATION | IMREAD_GRAYSCALE
+        IMREAD_IGNORE_ORIENTATION | IMREAD_GRAYSCALE
 }
+
 
 def list_from_file(filename,
                    prefix='',
@@ -95,6 +97,11 @@ def mkdir_or_exist(dir_name, mode=0o777):
         return
     dir_name = osp.expanduser(dir_name)
     os.makedirs(dir_name, mode=mode, exist_ok=True)
+
+
+def check_file_exist(filename, msg_tmpl='file "{}" does not exist'):
+    if not osp.isfile(filename):
+        raise FileNotFoundError(msg_tmpl.format(filename))
 
 
 def has_method(obj: object, method: str) -> bool:
@@ -374,6 +381,22 @@ def impad(img,
         value=pad_val)
 
     return img
+
+
+def impad_to_multiple(img, divisor, pad_val=0):
+    """Pad an image to ensure each edge to be multiple to some number.
+
+    Args:
+        img (ndarray): Image to be padded.
+        divisor (int): Padded image edges will be multiple to divisor.
+        pad_val (Number | Sequence[Number]): Same as :func:`impad`.
+
+    Returns:
+        ndarray: The padded image.
+    """
+    pad_h = int(np.ceil(img.shape[0] / divisor)) * divisor
+    pad_w = int(np.ceil(img.shape[1] / divisor)) * divisor
+    return impad(img, shape=(pad_h, pad_w), pad_val=pad_val)
 
 
 def imresize(img,
@@ -776,3 +799,74 @@ def imfrombytes(content, flag='color', channel_order='bgr', backend=None):
         if flag == IMREAD_COLOR and channel_order == 'rgb':
             cv2.cvtColor(img, cv2.COLOR_BGR2RGB, img)
         return img
+
+
+def imnormalize(img, mean, std, to_rgb=True):
+    """Normalize an image with mean and std.
+
+    Args:
+        img (ndarray): Image to be normalized.
+        mean (ndarray): The mean to be used for normalize.
+        std (ndarray): The std to be used for normalize.
+        to_rgb (bool): Whether to convert to rgb.
+
+    Returns:
+        ndarray: The normalized image.
+    """
+    img = img.copy().astype(np.float32)
+    return imnormalize_(img, mean, std, to_rgb)
+
+
+def imnormalize_(img, mean, std, to_rgb=True):
+    """Inplace normalize an image with mean and std.
+
+    Args:
+        img (ndarray): Image to be normalized.
+        mean (ndarray): The mean to be used for normalize.
+        std (ndarray): The std to be used for normalize.
+        to_rgb (bool): Whether to convert to rgb.
+
+    Returns:
+        ndarray: The normalized image.
+    """
+    # cv2 inplace normalization does not accept uint8
+    assert img.dtype != np.uint8
+    mean = np.float64(mean.reshape(1, -1))
+    stdinv = 1 / np.float64(std.reshape(1, -1))
+    if to_rgb:
+        cv2.cvtColor(img, cv2.COLOR_BGR2RGB, img)  # inplace
+    cv2.subtract(img, mean, img)  # inplace
+    cv2.multiply(img, stdinv, img)  # inplace
+    return img
+
+
+def is_seq_of(seq, expected_type, seq_type=None):
+    """Check whether it is a sequence of some type.
+
+    Args:
+        seq (Sequence): The sequence to be checked.
+        expected_type (type): Expected type of sequence items.
+        seq_type (type, optional): Expected sequence type.
+
+    Returns:
+        bool: Whether the sequence is valid.
+    """
+    if seq_type is None:
+        exp_seq_type = abc.Sequence
+    else:
+        assert isinstance(seq_type, type)
+        exp_seq_type = seq_type
+    if not isinstance(seq, exp_seq_type):
+        return False
+    for item in seq:
+        if not isinstance(item, expected_type):
+            return False
+    return True
+
+
+def is_list_of(seq, expected_type):
+    """Check whether it is a list of some type.
+
+    A partial method of :func:`is_seq_of`.
+    """
+    return is_seq_of(seq, expected_type, seq_type=list)

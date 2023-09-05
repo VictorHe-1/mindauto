@@ -7,6 +7,7 @@ from typing import Dict, List
 import numpy as np
 
 from .loading_transforms import *
+from .transforms_3d import *
 
 __all__ = ["create_transforms", "run_transforms"]
 _logger = logging.getLogger(__name__)
