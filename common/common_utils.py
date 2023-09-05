@@ -1,11 +1,30 @@
+import io
 import json
 import yaml
 import numbers
 import pickle
 import numpy as np
-from PIL import Image
 import cv2
+from cv2 import (IMREAD_COLOR, IMREAD_GRAYSCALE, IMREAD_IGNORE_ORIENTATION,
+                 IMREAD_UNCHANGED)
+import os
+import os.path as osp
 from pathlib import Path
+
+try:
+    from turbojpeg import TJCS_RGB, TJPF_BGR, TJPF_GRAY, TurboJPEG
+except ImportError:
+    TJCS_RGB = TJPF_GRAY = TJPF_BGR = TurboJPEG = None
+
+try:
+    from PIL import Image, ImageOps
+except ImportError:
+    Image = None
+
+try:
+    import tifffile
+except ImportError:
+    tifffile = None
 
 cv2_interp_codes = {
     'nearest': cv2.INTER_NEAREST,
@@ -24,6 +43,17 @@ pillow_interp_codes = {
     'hamming': Image.HAMMING
 }
 
+imread_backend = 'cv2'
+jpeg = None
+supported_backends = ['cv2', 'turbojpeg', 'pillow', 'tifffile']
+imread_flags = {
+    'color': IMREAD_COLOR,
+    'grayscale': IMREAD_GRAYSCALE,
+    'unchanged': IMREAD_UNCHANGED,
+    'color_ignore_orientation': IMREAD_IGNORE_ORIENTATION | IMREAD_COLOR,
+    'grayscale_ignore_orientation':
+    IMREAD_IGNORE_ORIENTATION | IMREAD_GRAYSCALE
+}
 
 def list_from_file(filename,
                    prefix='',
@@ -58,6 +88,38 @@ def list_from_file(filename,
             item_list.append(prefix + line.rstrip('\n\r'))
             cnt += 1
     return item_list
+
+
+def mkdir_or_exist(dir_name, mode=0o777):
+    if dir_name == '':
+        return
+    dir_name = osp.expanduser(dir_name)
+    os.makedirs(dir_name, mode=mode, exist_ok=True)
+
+
+def has_method(obj: object, method: str) -> bool:
+    """Check whether the object has a method.
+
+    Args:
+        method (str): The method name to check.
+        obj (object): The object to check.
+
+    Returns:
+        bool: True if the object has the method else False.
+    """
+    return hasattr(obj, method) and callable(getattr(obj, method))
+
+
+def is_str(x):
+    """Whether the input is an string instance.
+
+    Note: This method is deprecated since python 2 is no longer supported.
+    """
+    return isinstance(x, str)
+
+
+def is_filepath(x):
+    return is_str(x) or isinstance(x, Path)
 
 
 def load_from_serialized(file, file_format=None, **kwargs):
@@ -578,3 +640,139 @@ def imrotate(img,
         flags=cv2_interp_codes[interpolation],
         borderValue=border_value)
     return rotated
+
+
+def use_backend(backend):
+    """Select a backend for image decoding.
+
+    Args:
+        backend (str): The image decoding backend type. Options are `cv2`,
+        `pillow`, `turbojpeg` (see https://github.com/lilohuang/PyTurboJPEG)
+        and `tifffile`. `turbojpeg` is faster but it only supports `.jpeg`
+        file format.
+    """
+    assert backend in supported_backends
+    global imread_backend
+    imread_backend = backend
+    if imread_backend == 'turbojpeg':
+        if TurboJPEG is None:
+            raise ImportError('`PyTurboJPEG` is not installed')
+        global jpeg
+        if jpeg is None:
+            jpeg = TurboJPEG()
+    elif imread_backend == 'pillow':
+        if Image is None:
+            raise ImportError('`Pillow` is not installed')
+    elif imread_backend == 'tifffile':
+        if tifffile is None:
+            raise ImportError('`tifffile` is not installed')
+
+
+def _jpegflag(flag='color', channel_order='bgr'):
+    channel_order = channel_order.lower()
+    if channel_order not in ['rgb', 'bgr']:
+        raise ValueError('channel order must be either "rgb" or "bgr"')
+
+    if flag == 'color':
+        if channel_order == 'bgr':
+            return TJPF_BGR
+        elif channel_order == 'rgb':
+            return TJCS_RGB
+    elif flag == 'grayscale':
+        return TJPF_GRAY
+    else:
+        raise ValueError('flag must be "color" or "grayscale"')
+
+
+def _pillow2array(img, flag='color', channel_order='bgr'):
+    """Convert a pillow image to numpy array.
+
+    Args:
+        img (:obj:`PIL.Image.Image`): The image loaded using PIL
+        flag (str): Flags specifying the color type of a loaded image,
+            candidates are 'color', 'grayscale' and 'unchanged'.
+            Default to 'color'.
+        channel_order (str): The channel order of the output image array,
+            candidates are 'bgr' and 'rgb'. Default to 'bgr'.
+
+    Returns:
+        np.ndarray: The converted numpy array
+    """
+    channel_order = channel_order.lower()
+    if channel_order not in ['rgb', 'bgr']:
+        raise ValueError('channel order must be either "rgb" or "bgr"')
+
+    if flag == 'unchanged':
+        array = np.array(img)
+        if array.ndim >= 3 and array.shape[2] >= 3:  # color image
+            array[:, :, :3] = array[:, :, (2, 1, 0)]  # RGB to BGR
+    else:
+        # Handle exif orientation tag
+        if flag in ['color', 'grayscale']:
+            img = ImageOps.exif_transpose(img)
+        # If the image mode is not 'RGB', convert it to 'RGB' first.
+        if img.mode != 'RGB':
+            if img.mode != 'LA':
+                # Most formats except 'LA' can be directly converted to RGB
+                img = img.convert('RGB')
+            else:
+                # When the mode is 'LA', the default conversion will fill in
+                #  the canvas with black, which sometimes shadows black objects
+                #  in the foreground.
+                #
+                # Therefore, a random color (124, 117, 104) is used for canvas
+                img_rgba = img.convert('RGBA')
+                img = Image.new('RGB', img_rgba.size, (124, 117, 104))
+                img.paste(img_rgba, mask=img_rgba.split()[3])  # 3 is alpha
+        if flag in ['color', 'color_ignore_orientation']:
+            array = np.array(img)
+            if channel_order != 'rgb':
+                array = array[:, :, ::-1]  # RGB to BGR
+        elif flag in ['grayscale', 'grayscale_ignore_orientation']:
+            img = img.convert('L')
+            array = np.array(img)
+        else:
+            raise ValueError(
+                'flag must be "color", "grayscale", "unchanged", '
+                f'"color_ignore_orientation" or "grayscale_ignore_orientation"'
+                f' but got {flag}')
+    return array
+
+
+def imfrombytes(content, flag='color', channel_order='bgr', backend=None):
+    """Read an image from bytes.
+
+    Args:
+        content (bytes): Image bytes got from files or other streams.
+        flag (str): Same as :func:`imread`.
+        backend (str | None): The image decoding backend type. Options are
+            `cv2`, `pillow`, `turbojpeg`, `None`. If backend is None, the
+            global imread_backend specified by ``mmcv.use_backend()`` will be
+            used. Default: None.
+
+    Returns:
+        ndarray: Loaded image array.
+    """
+    if backend is None:
+        backend = imread_backend
+    if backend not in supported_backends:
+        raise ValueError(f'backend: {backend} is not supported. Supported '
+                         "backends are 'cv2', 'turbojpeg', 'pillow'")
+    use_backend()
+    if backend == 'turbojpeg':
+        img = jpeg.decode(content, _jpegflag(flag, channel_order))
+        if img.shape[-1] == 1:
+            img = img[:, :, 0]
+        return img
+    elif backend == 'pillow':
+        buff = io.BytesIO(content)
+        img = Image.open(buff)
+        img = _pillow2array(img, flag, channel_order)
+        return img
+    else:
+        img_np = np.frombuffer(content, np.uint8)
+        flag = imread_flags[flag] if is_str(flag) else flag
+        img = cv2.imdecode(img_np, flag)
+        if flag == IMREAD_COLOR and channel_order == 'rgb':
+            cv2.cvtColor(img, cv2.COLOR_BGR2RGB, img)
+        return img
