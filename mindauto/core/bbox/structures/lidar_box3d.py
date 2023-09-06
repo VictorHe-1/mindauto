@@ -156,7 +156,7 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
             if isinstance(points, ms.Tensor):
                 points[:, :3] = ops.matmul(points[:, :3], rot_mat_T)
             elif isinstance(points, np.ndarray):
-                rot_mat_T = rot_mat_T.numpy()
+                rot_mat_T = rot_mat_T.asnumpy()
                 points[:, :3] = np.dot(points[:, :3], rot_mat_T)
             elif isinstance(points, BasePoints):
                 # clockwise
@@ -195,7 +195,7 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
                     points[:, 1] = -points[:, 1]
                 elif bev_direction == 'vertical':
                     points[:, 0] = -points[:, 0]
-            elif isinstance(points, BasePoints):  # TODO: BasePoints
+            elif isinstance(points, BasePoints):
                 points.flip(bev_direction)
             return points
 
@@ -254,7 +254,7 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
         enlarged_boxes[:, 2] -= extra_width
         return self.new_box(enlarged_boxes)
 
-    # def points_in_boxes(self, points):
+    # def points_in_boxes(self, points): # TODO
     #     """Find the box which the points are in.
     #
     #     Args:
