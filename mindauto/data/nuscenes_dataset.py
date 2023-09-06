@@ -1,19 +1,21 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-import mmcv
 import numpy as np
 import pyquaternion
 import tempfile
 from nuscenes.utils.data_classes import Box as NuScenesBox
+from nuscenes.eval.detection.config import config_factory
+from nuscenes import NuScenes
+from nuscenes.eval.detection.evaluate import NuScenesEval
 from os import path as osp
 
-from mmdet.datasets import DATASETS
-from ..core import show_result
-from ..core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
-from .custom_3d import Custom3DDataset
-from .pipelines import Compose
+import common
+from mindauto.core.visualizer import show_result
+
+from mindauto.core.bbox.structures import Box3DMode, LiDARInstance3DBoxes, Coord3DMode
+from .base_dataset import Custom3DDataset
+from transforms import create_transforms
 
 
-@DATASETS.register_module()
 class NuScenesDataset(Custom3DDataset):
     r"""NuScenes Dataset.
 
@@ -138,7 +140,6 @@ class NuScenesDataset(Custom3DDataset):
 
         self.with_velocity = with_velocity
         self.eval_version = eval_version
-        from nuscenes.eval.detection.config import config_factory
         self.eval_detection_configs = config_factory(self.eval_version)
         if self.modality is None:
             self.modality = dict(
@@ -182,7 +183,7 @@ class NuScenesDataset(Custom3DDataset):
         Returns:
             list[dict]: List of annotations sorted by timestamps.
         """
-        data = mmcv.load(ann_file)
+        data = common.load_from_serialized(ann_file)
         data_infos = list(sorted(data['infos'], key=lambda e: e['timestamp']))
         data_infos = data_infos[::self.load_interval]
         self.metadata = data['metadata']
@@ -312,7 +313,7 @@ class NuScenesDataset(Custom3DDataset):
         mapped_class_names = self.CLASSES
 
         print('Start to convert detection format...')
-        for sample_id, det in enumerate(mmcv.track_iter_progress(results)):
+        for sample_id, det in enumerate(results):
             annos = []
             boxes = output_to_nusc_box(det)
             sample_token = self.data_infos[sample_id]['token']
@@ -359,10 +360,10 @@ class NuScenesDataset(Custom3DDataset):
             'results': nusc_annos,
         }
 
-        mmcv.mkdir_or_exist(jsonfile_prefix)
+        common.mkdir_or_exist(jsonfile_prefix)
         res_path = osp.join(jsonfile_prefix, 'results_nusc.json')
         print('Results writes to', res_path)
-        mmcv.dump(nusc_submissions, res_path)
+        common.dump(nusc_submissions, res_path)
         return res_path
 
     def _evaluate_single(self,
@@ -383,8 +384,6 @@ class NuScenesDataset(Custom3DDataset):
         Returns:
             dict: Dictionary of evaluation details.
         """
-        from nuscenes import NuScenes
-        from nuscenes.eval.detection.evaluate import NuScenesEval
 
         output_dir = osp.join(*osp.split(result_path)[:-1])
         nusc = NuScenes(
@@ -403,7 +402,7 @@ class NuScenesDataset(Custom3DDataset):
         nusc_eval.main(render_curves=False)
 
         # record metrics
-        metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
+        metrics = common.load_from_serialized(osp.join(output_dir, 'metrics_summary.json'))
         detail = dict()
         metric_prefix = f'{result_name}_NuScenes'
         for name in self.CLASSES:
@@ -533,7 +532,8 @@ class NuScenesDataset(Custom3DDataset):
                 with_label=False),
             dict(type='Collect3D', keys=['points'])
         ]
-        return Compose(pipeline)
+        global_config = dict(is_train=True)
+        return create_transforms(pipeline, global_config)  # TODO: replace Compose method
 
     def show(self, results, out_dir, show=True, pipeline=None):
         """Results visualization.
@@ -553,15 +553,15 @@ class NuScenesDataset(Custom3DDataset):
             data_info = self.data_infos[i]
             pts_path = data_info['lidar_path']
             file_name = osp.split(pts_path)[-1].split('.')[0]
-            points = self._extract_data(i, pipeline, 'points').numpy()
+            points = self._extract_data(i, pipeline, 'points').asnumpy()
             # for now we convert points into depth mode
             points = Coord3DMode.convert_point(points, Coord3DMode.LIDAR,
                                                Coord3DMode.DEPTH)
             inds = result['scores_3d'] > 0.1
-            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d'].tensor.numpy()
+            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d'].tensor.asnumpy()
             show_gt_bboxes = Box3DMode.convert(gt_bboxes, Box3DMode.LIDAR,
                                                Box3DMode.DEPTH)
-            pred_bboxes = result['boxes_3d'][inds].tensor.numpy()
+            pred_bboxes = result['boxes_3d'][inds].tensor.asnumpy()
             show_pred_bboxes = Box3DMode.convert(pred_bboxes, Box3DMode.LIDAR,
                                                  Box3DMode.DEPTH)
             show_result(points, show_gt_bboxes, show_pred_bboxes, out_dir,
@@ -582,12 +582,12 @@ def output_to_nusc_box(detection):
         list[:obj:`NuScenesBox`]: List of standard NuScenesBoxes.
     """
     box3d = detection['boxes_3d']
-    scores = detection['scores_3d'].numpy()
-    labels = detection['labels_3d'].numpy()
+    scores = detection['scores_3d'].asnumpy()
+    labels = detection['labels_3d'].asnumpy()
 
-    box_gravity_center = box3d.gravity_center.numpy()
-    box_dims = box3d.dims.numpy()
-    box_yaw = box3d.yaw.numpy()
+    box_gravity_center = box3d.gravity_center.asnumpy()
+    box_dims = box3d.dims.asnumpy()
+    box_yaw = box3d.yaw.asnumpy()
     # TODO: check whether this is necessary
     # with dir_offset & dir_limit in the head
     box_yaw = -box_yaw - np.pi / 2
