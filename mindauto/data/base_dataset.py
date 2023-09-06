@@ -1,57 +1,17 @@
-import os
-from typing import List, Union
-
-__all__ = ["BaseDataset"]
-
-# Copyright (c) OpenMMLab. All rights reserved.
-import mmcv
 import numpy as np
 import tempfile
 import warnings
 from os import path as osp
-from torch.utils.data import Dataset
 
-from ..core.bbox import get_box_type
-from .pipelines import Compose
+from mindauto.core.bbox.structures import get_box_type
+from common import load_from_serialized, dump, list_from_file
 from .utils import extract_result_dict, get_loading_pipeline
+from .transforms.transforms_factory import create_transforms, run_transforms
+
+__all__ = ["Custom3DDataset"]
 
 
-def list_from_file(filename,
-                   prefix='',
-                   offset=0,
-                   max_num=0,
-                   encoding='utf-8'):
-    """Load a text file and parse the content as a list of strings.
-
-    Args:
-        filename (str): Filename.
-        prefix (str): The prefix to be inserted to the beginning of each item.
-        offset (int): The offset of lines.
-        max_num (int): The maximum number of lines to be read,
-            zeros and negatives mean no limitation.
-        encoding (str): Encoding used to open the file. Default utf-8.
-
-    Examples:
-        >>> list_from_file('/path/of/your/file')
-        ['hello', 'world']
-
-    Returns:
-        list[str]: A list of strings.
-    """
-    cnt = 0
-    item_list = []
-    with open(filename, 'r', encoding=encoding) as f:
-        for _ in range(offset):
-            f.readline()
-        for line in f:
-            if 0 < max_num <= cnt:
-                break
-            item_list.append(prefix + line.rstrip('\n\r'))
-            cnt += 1
-    return item_list
-
-
-class Custom3DDataset(Dataset):
+class Custom3DDataset(object):
     """Customized 3D dataset.
 
     This is the base dataset of SUNRGB-D, ScanNet, nuScenes, and KITTI
@@ -102,7 +62,10 @@ class Custom3DDataset(Dataset):
         self.data_infos = self.load_annotations(self.ann_file)
 
         if pipeline is not None:
-            self.pipeline = Compose(pipeline)
+            global_config = dict(is_train=not test_mode)
+            self.transforms = create_transforms(pipeline, global_config)
+        else:
+            raise ValueError("No transform pipeline is specified!")
 
         # set group flag for the sampler
         if not self.test_mode:
@@ -117,7 +80,7 @@ class Custom3DDataset(Dataset):
         Returns:
             list[dict]: List of annotations.
         """
-        return mmcv.load(ann_file)
+        return load_from_serialized(ann_file)
 
     def get_data_info(self, index):
         """Get data info according to the given index.
@@ -189,7 +152,7 @@ class Custom3DDataset(Dataset):
         if input_dict is None:
             return None
         self.pre_pipeline(input_dict)
-        example = self.pipeline(input_dict)
+        example = run_transforms(input_dict, transforms=self.transforms)
         if self.filter_empty_gt and \
                 (example is None or
                     ~(example['gt_labels_3d']._data != -1).any()):
@@ -207,7 +170,7 @@ class Custom3DDataset(Dataset):
         """
         input_dict = self.get_data_info(index)
         self.pre_pipeline(input_dict)
-        example = self.pipeline(input_dict)
+        example = run_transforms(input_dict, transforms=self.transforms)
         return example
 
     @classmethod
@@ -258,79 +221,79 @@ class Custom3DDataset(Dataset):
             tmp_dir = tempfile.TemporaryDirectory()
             pklfile_prefix = osp.join(tmp_dir.name, 'results')
             out = f'{pklfile_prefix}.pkl'
-        mmcv.dump(outputs, out)
+        dump(outputs, out)
         return outputs, tmp_dir
 
-    def evaluate(self,
-                 results,
-                 metric=None,
-                 iou_thr=(0.25, 0.5),
-                 logger=None,
-                 show=False,
-                 out_dir=None,
-                 pipeline=None):
-        """Evaluate.
-
-        Evaluation in indoor protocol.
-
-        Args:
-            results (list[dict]): List of results.
-            metric (str | list[str]): Metrics to be evaluated.
-            iou_thr (list[float]): AP IoU thresholds.
-            show (bool): Whether to visualize.
-                Default: False.
-            out_dir (str): Path to save the visualization results.
-                Default: None.
-            pipeline (list[dict], optional): raw data loading for showing.
-                Default: None.
-
-        Returns:
-            dict: Evaluation results.
-        """
-        from mmdet3d.core.evaluation import indoor_eval
-        assert isinstance(
-            results, list), f'Expect results to be list, got {type(results)}.'
-        assert len(results) > 0, 'Expect length of results > 0.'
-        assert len(results) == len(self.data_infos)
-        assert isinstance(
-            results[0], dict
-        ), f'Expect elements in results to be dict, got {type(results[0])}.'
-        gt_annos = [info['annos'] for info in self.data_infos]
-        label2cat = {i: cat_id for i, cat_id in enumerate(self.CLASSES)}
-        ret_dict = indoor_eval(
-            gt_annos,
-            results,
-            iou_thr,
-            label2cat,
-            logger=logger,
-            box_type_3d=self.box_type_3d,
-            box_mode_3d=self.box_mode_3d)
-        if show:
-            self.show(results, out_dir, pipeline=pipeline)
-
-        return ret_dict
+    # def evaluate(self,
+    #              results,
+    #              metric=None,
+    #              iou_thr=(0.25, 0.5),
+    #              logger=None,
+    #              show=False,
+    #              out_dir=None,
+    #              pipeline=None):
+    #     """Evaluate.
+    #
+    #     Evaluation in indoor protocol.
+    #
+    #     Args:
+    #         results (list[dict]): List of results.
+    #         metric (str | list[str]): Metrics to be evaluated.
+    #         iou_thr (list[float]): AP IoU thresholds.
+    #         show (bool): Whether to visualize.
+    #             Default: False.
+    #         out_dir (str): Path to save the visualization results.
+    #             Default: None.
+    #         pipeline (list[dict], optional): raw data loading for showing.
+    #             Default: None.
+    #
+    #     Returns:
+    #         dict: Evaluation results.
+    #     """
+    #     from mmdet3d.core.evaluation import indoor_eval  # TODO: indoor_eval
+    #     assert isinstance(
+    #         results, list), f'Expect results to be list, got {type(results)}.'
+    #     assert len(results) > 0, 'Expect length of results > 0.'
+    #     assert len(results) == len(self.data_infos)
+    #     assert isinstance(
+    #         results[0], dict
+    #     ), f'Expect elements in results to be dict, got {type(results[0])}.'
+    #     gt_annos = [info['annos'] for info in self.data_infos]
+    #     label2cat = {i: cat_id for i, cat_id in enumerate(self.CLASSES)}
+    #     ret_dict = indoor_eval(
+    #         gt_annos,
+    #         results,
+    #         iou_thr,
+    #         label2cat,
+    #         logger=logger,
+    #         box_type_3d=self.box_type_3d,
+    #         box_mode_3d=self.box_mode_3d)
+    #     if show:
+    #         self.show(results, out_dir, pipeline=pipeline)
+    #
+    #     return ret_dict
 
     def _build_default_pipeline(self):
         """Build the default pipeline for this dataset."""
         raise NotImplementedError('_build_default_pipeline is not implemented '
                                   f'for dataset {self.__class__.__name__}')
 
-    def _get_pipeline(self, pipeline):
+    def _get_pipeline(self, pipeline, is_train=True):
         """Get data loading pipeline in self.show/evaluate function.
 
         Args:
             pipeline (list[dict] | None): Input pipeline. If None is given, \
-                get from self.pipeline.
+                get from self.transform.
         """
         if pipeline is None:
-            if not hasattr(self, 'pipeline') or self.pipeline is None:
+            if not hasattr(self, 'pipeline') or self.transforms is None:
                 warnings.warn(
                     'Use default pipeline for data loading, this may cause '
                     'errors when data is on ceph')
                 return self._build_default_pipeline()
-            loading_pipeline = get_loading_pipeline(self.pipeline.transforms)
-            return Compose(loading_pipeline)
-        return Compose(pipeline)
+            loading_pipeline = get_loading_pipeline(self.transforms)
+            return create_transforms(loading_pipeline, dict(is_train=is_train))
+        return create_transforms(pipeline, dict(is_train=is_train))
 
     def _extract_data(self, index, pipeline, key, load_annos=False):
         """Load data using input pipeline and extract data according to key.
@@ -354,7 +317,7 @@ class Custom3DDataset(Dataset):
             self.test_mode = False
         input_dict = self.get_data_info(index)
         self.pre_pipeline(input_dict)
-        example = pipeline(input_dict)
+        example = run_transforms(input_dict, transforms=self.transforms)
 
         # extract data items according to keys
         if isinstance(key, str):
@@ -406,80 +369,3 @@ class Custom3DDataset(Dataset):
         zeros.
         """
         self.flag = np.zeros(len(self), dtype=np.uint8)
-
-
-class BaseDataset(object):
-    """
-    Base dataset to parse dataset files.
-
-    Args:
-        - data_dir:
-        - label_file:
-        - output_columns (List(str)): names of elements in the output tuple of __getitem__
-    Attributes:
-        data_list (List(Tuple)): source data items (e.g., containing image path and raw annotation)
-    """
-
-    def __init__(
-        self,
-        data_dir: Union[str, List[str]],
-        label_file: Union[str, List[str]] = None,
-        output_columns: List[str] = None,
-        **kwargs,
-    ):
-        self._index = 0
-        self.data_list = []
-
-        # check files
-        if isinstance(data_dir, str):
-            data_dir = [data_dir]
-        for f in data_dir:
-            if not os.path.exists(f):
-                raise ValueError(f"data_dir '{f}' does not existed. Please check the yaml file for both train and eval")
-        self.data_dir = data_dir
-
-        if label_file is not None:
-            if isinstance(label_file, str):
-                label_file = [label_file]
-            for f in label_file:
-                if not os.path.exists(f):
-                    raise ValueError(
-                        f"label_file '{f}' does not existed. Please check the yaml file for both train and eval"
-                    )
-        else:
-            label_file = []
-        self.label_file = label_file
-
-        # must specify output column names
-        self.output_columns = output_columns
-
-    def __getitem__(self, index):
-        # return self.data_list[index]
-        raise NotImplementedError
-
-    def set_output_columns(self, column_names: List[str]):
-        self.output_columns = column_names
-
-    def get_output_columns(self) -> List[str]:
-        """
-        get the column names for the output tuple of __getitem__, required for data mapping in the next step
-        """
-        # raise NotImplementedError
-        return self.output_columns
-
-    def __next__(self):
-        if self._index >= len(self.data_list):
-            raise StopIteration
-        else:
-            item = self.__getitem__(self._index)
-            self._index += 1
-            return item
-
-    def __len__(self):
-        return len(self.data_list)
-
-    def _load_image_bytes(self, img_path):
-        """load image bytes (prepared for decoding)"""
-        with open(img_path, "rb") as f:
-            image_bytes = f.read()
-        return image_bytes

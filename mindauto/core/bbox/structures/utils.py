@@ -104,3 +104,41 @@ def xywhr2xyxyr(boxes_xywhr):
     boxes[:, 3] = boxes_xywhr[:, 1] + half_h
     boxes[:, 4] = boxes_xywhr[:, 4]
     return boxes
+
+
+def points_cam2img(points_3d, proj_mat, with_depth=False):
+    """Project points from camera coordicates to image coordinates.
+
+    Args:
+        points_3d (torch.Tensor): Points in shape (N, 3).
+        proj_mat (torch.Tensor): Transformation matrix between coordinates.
+        with_depth (bool, optional): Whether to keep depth in the output.
+            Defaults to False.
+
+    Returns:
+        torch.Tensor: Points in image coordinates with shape [N, 2].
+    """
+    points_num = list(points_3d.shape)[:-1]
+
+    points_shape = np.concatenate([points_num, [1]], axis=0).tolist()
+    assert len(proj_mat.shape) == 2, 'The dimension of the projection' \
+                                     f' matrix should be 2 instead of {len(proj_mat.shape)}.'
+    d1, d2 = proj_mat.shape[:2]
+    assert (d1 == 3 and d2 == 3) or (d1 == 3 and d2 == 4) or (
+            d1 == 4 and d2 == 4), 'The shape of the projection matrix' \
+                                  f' ({d1}*{d2}) is not supported.'
+    if d1 == 3:
+        proj_mat_expanded = ops.eye(
+            4, dtype=proj_mat.dtype)
+        proj_mat_expanded[:d1, :d2] = proj_mat
+        proj_mat = proj_mat_expanded
+
+    # previous implementation use new_zeros, new_one yeilds better results
+    points_4 = ops.cat(
+        [points_3d, points_3d.new_ones(*points_shape)], axis=-1)
+    point_2d = ops.matmul(points_4, proj_mat.t())
+    point_2d_res = point_2d[..., :2] / point_2d[..., 2:3]
+
+    if with_depth:
+        return ops.cat([point_2d_res, point_2d[..., 2:3]], axis=-1)
+    return point_2d_res
