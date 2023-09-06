@@ -140,7 +140,7 @@ class ObjectRangeFilter:
         # using mask to index gt_labels_3d will cause bug when
         # len(gt_labels_3d) == 1, where mask=1 will be interpreted
         # as gt_labels_3d[1] and cause out of index error
-        gt_labels_3d = gt_labels_3d[mask.numpy().astype(np.bool)]
+        gt_labels_3d = gt_labels_3d[mask.asnumpy().astype(np.bool)]
 
         # limit rad to [-pi, pi]
         gt_bboxes_3d.limit_yaw(offset=0.5, period=2 * np.pi)
@@ -480,4 +480,44 @@ class MultiScaleFlipAug3D(object):
         repr_str += f'img_scale={self.img_scale}, flip={self.flip}, '
         repr_str += f'pts_scale_ratio={self.pts_scale_ratio}, '
         repr_str += f'flip_direction={self.flip_direction})'
+        return repr_str
+
+
+class RandomScaleImageMultiViewImage(object):
+    """Random scale the image
+    Args:
+        scales
+    """
+
+    def __init__(self, scales=[]):
+        self.scales = scales
+        assert len(self.scales) == 1
+
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+        rand_ind = np.random.permutation(range(len(self.scales)))[0]
+        rand_scale = self.scales[rand_ind]
+
+        y_size = [int(img.shape[0] * rand_scale) for img in results['img']]
+        x_size = [int(img.shape[1] * rand_scale) for img in results['img']]
+        scale_factor = np.eye(4)
+        scale_factor[0, 0] *= rand_scale
+        scale_factor[1, 1] *= rand_scale
+        results['img'] = [common.imresize(img, (x_size[idx], y_size[idx]), return_scale=False) for idx, img in
+                          enumerate(results['img'])]
+        lidar2img = [scale_factor @ l2i for l2i in results['lidar2img']]
+        results['lidar2img'] = lidar2img
+        results['img_shape'] = [img.shape for img in results['img']]
+        results['ori_shape'] = [img.shape for img in results['img']]
+
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(size={self.scales}, '
         return repr_str

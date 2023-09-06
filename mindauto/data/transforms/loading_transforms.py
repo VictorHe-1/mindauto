@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import os.path as osp
+from os import path as osp
 import pycocotools.mask as maskUtils
 from mindauto.core.mask import BitmapMasks
 import common
