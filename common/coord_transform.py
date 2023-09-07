@@ -2,7 +2,7 @@ import mindspore as ms
 from mindspore import ops
 from functools import partial
 
-from mmdet3d.core.points import get_points_type
+from mindauto.core.points import get_points_type
 
 
 def apply_3d_transformation(pcd, coord_type, img_meta, reverse=False):

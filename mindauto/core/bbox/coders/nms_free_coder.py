@@ -108,7 +108,7 @@ class NMSFreeCoder(BaseBBoxCoder):
         all_cls_scores = preds_dicts['all_cls_scores'][-1]
         all_bbox_preds = preds_dicts['all_bbox_preds'][-1]
 
-        batch_size = all_cls_scores.shape()[0]
+        batch_size = all_cls_scores.shape[0]
         predictions_list = []
         for i in range(batch_size):
             predictions_list.append(self.decode_single(all_cls_scores[i], all_bbox_preds[i]))

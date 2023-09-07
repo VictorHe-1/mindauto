@@ -40,7 +40,7 @@ class BaseInstance3DBoxes(object):
             # Use reshape, so we don't end up creating a new tensor that
             # does not depend on the inputs (and consequently confuses jit)
             tensor = tensor.reshape((0, box_dim)).astype(ms.float32)
-        assert tensor.ndim == 2 and tensor.shape()[-1] == box_dim, tensor.shape()
+        assert tensor.ndim == 2 and tensor.shape[-1] == box_dim, tensor.shape
 
         if tensor.shape[-1] == 6:
             # If the dimension of boxes is 6, we expand box_dim by padding

@@ -133,7 +133,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
         """
         if not isinstance(angle, ms.Tensor):
             angle = ms.Tensor(angle, dtype=self.tensor.dtype)
-        assert angle.shape() == (3, 3) or angle.numel() == 1, \
+        assert angle.shape == (3, 3) or angle.numel() == 1, \
             f'invalid rotation angle shape {angle.shape}'
 
         if angle.numel() == 1:
