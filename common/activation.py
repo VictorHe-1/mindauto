@@ -17,7 +17,7 @@ def build_activation_layer(cfg):
     Returns:
         nn.Module: Created activation layer.
     """
-    obj_cls = activation_layers.get(cfg[type])
+    obj_cls = activation_layers.get(cfg['type'])
     args = cfg.copy()
     args.pop('type')
     return obj_cls(**args)
