@@ -3,7 +3,7 @@ from .encoder import BEVFormerEncoder, BEVFormerLayer
 from .custom_base_transformer_layer import MyCustomBaseTransformerLayer
 from .temporal_self_attention import TemporalSelfAttention
 from .spatial_cross_attention import MSDeformableAttention3D
-from .transformer import FFN
+from .transformer import FFN, PerceptionTransformer
 
 transformer_layers = {
     'BEVFormerLayer': BEVFormerLayer,
@@ -19,6 +19,9 @@ attention_layers = {
 }
 feedforward_layers = {
     'FFN': FFN
+}
+transformer_types = {
+    'PerceptionTransformer': PerceptionTransformer
 }
 
 
@@ -45,6 +48,13 @@ def build_attention(cfg):
 
 def build_feedforward_network(cfg):
     obj_cls = feedforward_layers.get(cfg['type'])
+    args = cfg.copy()
+    args.pop('type')
+    return obj_cls(**args)
+
+
+def build_transformer(cfg):
+    obj_cls = transformer_types.get(cfg['type'])
     args = cfg.copy()
     args.pop('type')
     return obj_cls(**args)
