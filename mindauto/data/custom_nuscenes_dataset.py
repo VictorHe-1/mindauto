@@ -6,7 +6,7 @@ import random
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 
 import common
-from .nuscnes_eval import NuScenesEval_custom  # TODO: implement this
+from .nuscenes_eval import NuScenesEval_custom
 from .nuscenes_dataset import NuScenesDataset
 from .transforms.transforms_factory import run_transforms
 
