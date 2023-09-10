@@ -1,0 +1,263 @@
+system:
+  mode: 0 # 0 for graph mode, 1 for pynative mode in MindSpore
+  distribute: True
+  amp_level: 'O0'
+  seed: 42
+  val_while_train: False
+  drop_overflow_update: False
+  device_id: 0
+
+dim: &dim 256
+pos_dim: &pos_dim 128
+ffn_dim: &ffn_dim 512
+num_levels: &num_levels 1
+bev_h: &bev_h 50
+bev_w: &bev_w 50
+point_cloud_range: &point_cloud_range [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+voxel_size: &voxel_size [0.2, 0.2, 8]
+img_norm_cfg: &img_norm_cfg
+  mean: [123.675, 116.28, 103.53]
+  std: [58.395, 57.12, 57.375]
+  to_rgb: True
+
+class_names: &class_names ['car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+
+input_modality: &input_modality
+  use_lidar: False
+  use_camera: True
+  use_radar: False
+  use_map: False
+  use_external: True
+
+encoder_attn_cfg: &encoder_attn_cfg
+  - type: 'TemporalSelfAttention'
+    embed_dims: *dim
+    num_levels: 1
+  - type: 'SpatialCrossAttention'
+    pc_range: *point_cloud_range
+    deformable_attention:
+      type: 'MSDeformableAttention3D'
+      embed_dims: *dim
+      num_points: 8
+      num_levels: *num_levels
+    embed_dims: *dim
+
+decoder_attn_cfg: &decoder_attn_cfg
+  - type: 'MultiheadAttention'
+    embed_dims: *dim
+    num_heads: 8
+    dropout: 0.1
+  - type: 'CustomMSDeformableAttention'
+    embed_dims: *dim
+    num_levels: 1
+
+model:
+  type: 'BEVFormer'
+  use_grid_mask: True
+  video_test_mode: True
+  backbone:
+    type: resnet50
+    pretrained: True #https://download.mindspore.cn/toolkits/mindcv/mobilenet/mobilenetv3/mobilenet_v3_large_050_no_scale_se_v2_expand-3c4047ac.ckpt
+  neck:
+    type: FPN
+    in_channels: [2048]
+    out_channels: *dim
+    start_level: 0
+    add_extra_convs: 'on_output'
+    num_outs: *num_levels
+    relu_before_extra_convs: True
+  head:
+    type: BEVFormerHead
+    bev_h: *bev_h
+    bev_w: *bev_w
+    num_query: 900
+    num_classes: 10
+    in_channels: *dim
+    sync_cls_avg_factor: True
+    with_box_refine: True
+    as_two_stage: False
+    transformer:
+      type: PerceptionTransformer
+      rotate_prev_bev: True
+      use_shift: True
+      use_can_bus: True
+      embed_dims: *dim
+      encoder:
+        type: BEVFormerEncoder
+        num_layers: 3
+        pc_range: *point_cloud_range
+        num_points_in_pillar: 4
+        return_intermediate: False
+        transformerlayers:
+          type: BEVFormerLayer
+          attn_cfgs: *encoder_attn_cfg
+          feedforward_channels: *ffn_dim
+          ffn_dropout: 0.1
+          operation_order: ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
+      decoder:
+        type: DetectionTransformerDecoder
+        num_layers: 6
+        return_intermediate: True
+        transformerlayers:
+          type: DetrTransformerDecoderLayer
+          attn_cfgs: *decoder_attn_cfg
+          feedforward_channels: *ffn_dim
+          ffn_dropout: 0.1
+          operation_order: ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
+  bbox_coder:
+    type: 'NMSFreeCoder'
+    post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+    pc_range: *point_cloud_range
+    max_num: 300
+    voxel_size: *voxel_size
+    num_classes: 10
+  positional_encoding:
+    type: 'LearnedPositionalEncoding'
+    num_feats: *pos_dim
+    row_num_embed: 50
+    col_num_embed: 50
+  train_cfg:
+    pts:
+      grid_size: [512, 512, 1]
+      voxel_size: *voxel_size
+      point_cloud_range: *point_cloud_range
+      out_size_factor: 4
+      assigner:
+        type: HungarianAssigner3D
+        cls_cost:
+          type: FocalLossCost
+          weight: 2.0
+        reg_cost:
+          type: BBox3DL1Cost
+          weight: 0.25
+        iou_cost:
+          type: IoUCost
+          weight: 0.0
+        pc_range: *point_cloud_range
+
+#metric:
+#  name: DetMetric
+#  main_indicator: f-score
+
+loss:
+  loss_cls:
+    type: 'FocalLoss'
+    use_sigmoid: True
+    gamma: 2.0
+    alpha: 0.25
+    loss_weight: 2.0
+  loss_bbox:
+    type: 'L1Loss'
+    loss_weight: 0.25
+  loss_iou:
+    type: 'GIoULoss'
+    loss_weight: 0.0
+
+scheduler:
+  scheduler: CosineAnnealing
+  lr: 2e-4
+  warmup: linear
+  warmup_iters: 500
+  warmup_ratio: 1.0/3
+  min_lr_ratio: 1e-3
+  num_epochs: 24
+
+optimizer:
+  opt: AdamW
+  filter_bias_and_bn: False
+  weight_decay: 0.01
+
+# only used for mixed precision training
+loss_scaler:
+  type: dynamic
+  loss_scale: 512
+  scale_factor: 2
+  scale_window: 1000
+
+train: #  ema: True
+  ckpt_save_dir: './tmp_det'
+  dataset_sink_mode: True
+  dataset:
+    type: &dataset_type CustomNuScenesDataset
+    dataset_root: ../ocr_datasets
+    data_dir: ic15/ch4_training_images
+    label_file: nuscenes_infos_temporal_train.pkl
+    sample_ratio: 1.0
+    transform_pipeline:
+      - LoadMultiViewImageFromFiles:
+          to_float32: True
+      - PhotoMetricDistortionMultiViewImage:
+      - LoadAnnotations3D:
+          with_bbox_3d: True
+          with_label_3d: True
+          with_attr_label: False
+      - ObjectRangeFilter:
+          point_cloud_range: *point_cloud_range
+      - ObjectNameFilter:
+          classes: *class_names
+      - NormalizeMultiviewImage: *img_norm_cfg
+      - RandomScaleImageMultiViewImage:
+          scales: [0.5]
+      - PadMultiViewImage:
+          size_divisor: 32
+      - DefaultFormatBundle3D:
+          class_names: *class_names
+      - CustomCollect3D:
+          keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img']
+    #  the order of the dataloader list, matching the network input and the input labels for the loss function, and optional data for debug/visualize
+    classes: *class_names
+    modality: *input_modality
+    test_mode: False
+    use_valid_flag: True
+    bev_size: &bev_size [50, 50]
+    queue_length: 3
+    box_type_3d: LiDAR
+    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d','img' ]
+#    net_input_column_index: [ 0 ] # input indices for network forward func in output_columns
+
+  loader:
+    shuffle: False
+    batch_size: 1
+    drop_remainder: True
+    num_workers: 4
+
+eval:
+  ckpt_load_path: 'tmp_det/best.ckpt'
+  dataset_sink_mode: False
+  dataset:
+    type: *dataset_type
+    dataset_root: ../ocr_datasets
+    data_dir: ic15/ch4_test_images
+    label_file: nuscenes_infos_temporal_val.pkl
+    sample_ratio: 1.0
+    transform_pipeline:
+      - LoadMultiViewImageFromFiles:
+          to_float32: True
+      - NormalizeMultiviewImage: *img_norm_cfg
+      - MultiScaleFlipAug3D:
+          img_scale: [1600, 900]
+          pts_scale_ratio: 1
+          flip: False
+          transforms:
+            - RandomScaleImageMultiViewImage:
+                scales: [ 0.5 ]
+            - PadMultiViewImage:
+                size_divisor: 32
+            - DefaultFormatBundle3D:
+                class_names: *class_names
+                with_label: False
+            - CustomCollect3D:
+                keys: [ 'img' ]
+    #  the order of the dataloader list, matching the network input and the labels for evaluation
+    output_columns: [ 'img_metas', 'img']
+    #    net_input_column_index: [ 0 ]
+    #    label_column_index: [ 1, 2]  # input indices marked as label
+    bev_size: *bev_size
+    classes: *class_names
+    modality: *input_modality
+
+  loader:
+    shuffle: False
+    batch_size: 1
+    drop_remainder: False
+    num_workers: 2
