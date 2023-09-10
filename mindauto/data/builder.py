@@ -3,14 +3,15 @@ import multiprocessing
 import os
 
 import mindspore as ms
-from .nuscenes_dataset import LMDBDataset
+from .custom_nuscenes_dataset import CustomNuScenesDataset
+from .nuscenes_dataset import NuScenesDataset
 
 __all__ = ["build_dataset"]
 _logger = logging.getLogger(__name__)
 
 supported_dataset_types = [
-    "BaseDataset",
     "NuScenesDataset",
+    "CustomNuScenesDataset",
 ]
 
 
@@ -66,7 +67,7 @@ def build_dataset(
 
     Example:
         >>> # Load a DetDataset/RecDataset
-        >>> from mindocr.data import build_dataset
+        >>> from mindauto.data import build_dataset
         >>> data_config = {
         >>>     "type": "DetDataset",
         >>>     "dataset_root": "path/to/datasets/",

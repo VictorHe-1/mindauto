@@ -46,6 +46,7 @@ class Custom3DDataset(object):
                  pipeline=None,
                  classes=None,
                  modality=None,
+                 output_columns=None,
                  box_type_3d='LiDAR',
                  filter_empty_gt=True,
                  test_mode=False):
@@ -60,6 +61,7 @@ class Custom3DDataset(object):
         self.CLASSES = self.get_classes(classes)
         self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
         self.data_infos = self.load_annotations(self.ann_file)
+        self.output_columns = output_columns
 
         if pipeline is not None:
             global_config = dict(is_train=not test_mode)
@@ -70,6 +72,16 @@ class Custom3DDataset(object):
         # set group flag for the sampler
         if not self.test_mode:
             self._set_group_flag()
+
+    def set_output_columns(self, column_names):
+        self.output_columns = column_names
+
+    def get_output_columns(self):
+        """
+        get the column names for the output tuple of __getitem__, required for data mapping in the next step
+        """
+        # raise NotImplementedError
+        return self.output_columns
 
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
