@@ -20,14 +20,13 @@ import mindspore as ms
 from mindspore.communication import get_group_size, get_rank, init
 
 from mindauto.data import build_dataset
-from mindauto.losses import build_loss
+# from mindauto.losses import build_loss
 from mindauto.metrics import build_metric
 from mindauto.models import build_model
 from mindauto.optim import create_group_params, create_optimizer
-from mindauto.postprocess import build_postprocess
 from mindauto.scheduler import create_scheduler
 from mindauto.utils.callbacks import EvalSaveCallback
-from mindauto.utils.checkpoint import resume_train_network
+# from mindauto.utils.checkpoint import resume_train_network
 from mindauto.utils.ema import EMA
 from mindauto.utils.logger import set_logger
 from mindauto.utils.loss_scaler import get_loss_scales
@@ -40,7 +39,7 @@ logger = logging.getLogger("mindauto.train")
 
 def main(cfg):
     # init env
-    ms.set_context(mode=cfg.system.mode,device_id=5)
+    ms.set_context(mode=cfg.system.mode, device_id=0)
     if cfg.system.distribute:
         init()
         device_num = get_group_size()
@@ -75,7 +74,7 @@ def main(cfg):
                 f"specified by environment variable 'DEVICE_ID'."
             )
         else:
-            device_id = cfg.system.get("device_id", 5)
+            device_id = cfg.system.get("device_id", 0)
             ms.set_context(device_id=device_id)
             logger.info(
                 f"Standalone training. Device id: {device_id}, "
@@ -107,16 +106,13 @@ def main(cfg):
 
     # create model
     amp_level = cfg.system.get("amp_level", "O0")
-    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None), amp_level=amp_level)
+    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None), amp_level=amp_level) # TODO
+    network.init_weights()
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
 
-    # create loss
-    loss_fn = build_loss(cfg.loss.pop("name"), **cfg["loss"])
-
     net_with_loss = NetWithLossWrapper(
         network,
-        loss_fn,
         input_indices=cfg.train.dataset.pop("net_input_column_index", None),
         label_indices=cfg.train.dataset.pop("label_column_index", None),
         pred_cast_fp32=cfg.train.pop("pred_cast_fp32", amp_level != "O0"),
@@ -135,18 +131,6 @@ def main(cfg):
 
     # resume ckpt
     start_epoch = 0
-    if cfg.model.resume:
-        resume_ckpt = (
-            os.path.join(cfg.train.ckpt_save_dir, "train_resume.ckpt")
-            if isinstance(cfg.model.resume, bool)
-            else cfg.model.resume
-        )
-        start_epoch, loss_scale, cur_iter, last_overflow_iter = resume_train_network(network, optimizer, resume_ckpt)
-        loss_scale_manager.loss_scale_value = loss_scale
-        if cfg.loss_scaler.type == "dynamic":
-            loss_scale_manager.cur_iter = cur_iter
-            loss_scale_manager.last_overflow_iter = last_overflow_iter
-
     # build train step cell
     gradient_accumulation_steps = cfg.train.get("gradient_accumulation_steps", 1)
     clip_grad = cfg.train.get("clip_grad", False)
@@ -165,18 +149,15 @@ def main(cfg):
     )
 
     # build postprocess and metric
-    postprocessor = None
     metric = None
     if cfg.system.val_while_train:
         # postprocess network prediction
-        postprocessor = build_postprocess(cfg.postprocess)
-        metric = build_metric(cfg.metric, device_num=device_num)
+        metric = build_metric(cfg.metric, device_num=device_num)  # TODO: build metric
 
     # build callbacks
     eval_cb = EvalSaveCallback(
         network,
         loader_eval,
-        postprocessor=postprocessor,
         metrics=[metric],
         pred_cast_fp32=(amp_level != "O0"),
         rank_id=rank_id,
