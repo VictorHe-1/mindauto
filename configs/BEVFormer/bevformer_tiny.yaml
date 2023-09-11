@@ -104,18 +104,30 @@ model:
           feedforward_channels: *ffn_dim
           ffn_dropout: 0.1
           operation_order: ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
-  bbox_coder:
-    type: 'NMSFreeCoder'
-    post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
-    pc_range: *point_cloud_range
-    max_num: 300
-    voxel_size: *voxel_size
-    num_classes: 10
-  positional_encoding:
-    type: 'LearnedPositionalEncoding'
-    num_feats: *pos_dim
-    row_num_embed: 50
-    col_num_embed: 50
+    loss_cls:
+      type: 'FocalLoss'
+      use_sigmoid: True
+      gamma: 2.0
+      alpha: 0.25
+      loss_weight: 2.0
+    loss_bbox:
+      type: 'L1Loss'
+      loss_weight: 0.25
+    loss_iou:
+      type: 'GIoULoss'
+      loss_weight: 0.0
+    bbox_coder:
+      type: 'NMSFreeCoder'
+      post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+      pc_range: *point_cloud_range
+      max_num: 300
+      voxel_size: *voxel_size
+      num_classes: 10
+    positional_encoding:
+      type: 'LearnedPositionalEncoding'
+      num_feats: *pos_dim
+      row_num_embed: 50
+      col_num_embed: 50
   train_cfg:
     pts:
       grid_size: [512, 512, 1]
@@ -138,20 +150,6 @@ model:
 #metric:
 #  name: DetMetric
 #  main_indicator: f-score
-
-loss:
-  loss_cls:
-    type: 'FocalLoss'
-    use_sigmoid: True
-    gamma: 2.0
-    alpha: 0.25
-    loss_weight: 2.0
-  loss_bbox:
-    type: 'L1Loss'
-    loss_weight: 0.25
-  loss_iou:
-    type: 'GIoULoss'
-    loss_weight: 0.0
 
 scheduler:
   scheduler: CosineAnnealing
