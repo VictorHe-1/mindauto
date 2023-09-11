@@ -40,3 +40,32 @@ def bbox_mapping_back(bboxes,
                            flip_direction) if flip else bboxes
     new_bboxes = new_bboxes.view(-1, 4) / ms.Tensor(scale_factor, dtype=new_bboxes.dtype)
     return new_bboxes.view(bboxes.shape)
+
+
+def bbox3d2result(bboxes, scores, labels, attrs=None):
+    """Convert detection results to a list of numpy arrays.
+
+    Args:
+        bboxes (torch.Tensor): Bounding boxes with shape of (n, 5).
+        labels (torch.Tensor): Labels with shape of (n, ).
+        scores (torch.Tensor): Scores with shape of (n, ).
+        attrs (torch.Tensor, optional): Attributes with shape of (n, ). \
+            Defaults to None.
+
+    Returns:
+        dict[str, torch.Tensor]: Bounding box results in cpu mode.
+
+            - boxes_3d (torch.Tensor): 3D boxes.
+            - scores (torch.Tensor): Prediction scores.
+            - labels_3d (torch.Tensor): Box labels.
+            - attrs_3d (torch.Tensor, optional): Box attributes.
+    """
+    result_dict = dict(
+        boxes_3d=bboxes,
+        scores_3d=scores,
+        labels_3d=labels)
+
+    if attrs is not None:
+        result_dict['attrs_3d'] = attrs
+
+    return result_dict
