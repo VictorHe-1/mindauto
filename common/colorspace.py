@@ -20,7 +20,14 @@ def convert_color_factory(src, dst):
 
     return convert_color
 
+bgr2rgb = convert_color_factory('bgr', 'rgb')
+
+rgb2bgr = convert_color_factory('rgb', 'bgr')
 
 bgr2hsv = convert_color_factory('bgr', 'hsv')
 
 hsv2bgr = convert_color_factory('hsv', 'bgr')
+
+bgr2hls = convert_color_factory('bgr', 'hls')
+
+hls2bgr = convert_color_factory('hls', 'bgr')
