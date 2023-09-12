@@ -43,8 +43,9 @@ class CustomNuScenesDataset(NuScenesDataset):
                 return None
             self.pre_pipeline(input_dict)
             example = run_transforms(input_dict, transforms=self.transforms)
+            gt_labels_3d = example['gt_labels_3d'].asnumpy()
             if self.filter_empty_gt and \
-                    (example is None or ~(example['gt_labels_3d']._data != -1).any()):
+                    (example is None or ~(gt_labels_3d != -1).any()):
                 return None
             queue.append(example)
         return self.union2one(queue)
