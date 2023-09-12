@@ -34,7 +34,6 @@ class Evaluator:
         network,
         dataloader,
         loss_fn=None,
-        postprocessor=None,
         metrics=None,
         pred_cast_fp32=False,
         loader_output_columns=None,
@@ -47,7 +46,6 @@ class Evaluator:
         **kwargs,
     ):
         self.net = network
-        self.postprocessor = postprocessor
         self.metrics = metrics if isinstance(metrics, List) else [metrics]
         self.metric_names = []
         for m in metrics:

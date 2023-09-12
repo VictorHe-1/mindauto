@@ -30,7 +30,6 @@ from mindauto.utils.callbacks import EvalSaveCallback
 from mindauto.utils.ema import EMA
 from mindauto.utils.logger import set_logger
 from mindauto.utils.loss_scaler import get_loss_scales
-from mindauto.utils.model_wrapper import NetWithLossWrapper
 from mindauto.utils.seed import set_seed
 from mindauto.utils.train_step_wrapper import TrainOneStepWrapper
 
@@ -111,13 +110,6 @@ def main(cfg):
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
 
-    net_with_loss = NetWithLossWrapper(
-        network,
-        input_indices=cfg.train.dataset.pop("net_input_column_index", None),
-        label_indices=cfg.train.dataset.pop("label_column_index", None),
-        pred_cast_fp32=cfg.train.pop("pred_cast_fp32", amp_level != "O0"),
-    )  # wrap train-one-step cell
-
     # get loss scale setting for mixed precision training
     loss_scale_manager, optimizer_loss_scale = get_loss_scales(cfg)
 
@@ -135,10 +127,10 @@ def main(cfg):
     gradient_accumulation_steps = cfg.train.get("gradient_accumulation_steps", 1)
     clip_grad = cfg.train.get("clip_grad", False)
     use_ema = cfg.train.get("ema", False)
-    ema = EMA(network, ema_decay=cfg.train.get("ema_decay", 0.9999), updates=0) if use_ema else None
+    ema = EMA(network, ema_decay=cfg.train.get("ema_decay", 0.9999), updates=0) if use_ema else None  # TODO
 
     train_net = TrainOneStepWrapper(
-        net_with_loss,
+        network,
         optimizer=optimizer,
         scale_sense=loss_scale_manager,
         drop_overflow_update=cfg.system.drop_overflow_update,

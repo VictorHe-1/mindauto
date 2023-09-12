@@ -16,10 +16,9 @@ class NetWithLossWrapper(nn.Cell):
             If it is None, then the remaining items will be fed.
     """
 
-    def __init__(self, net, loss_fn, pred_cast_fp32=False, input_indices=None, label_indices=None):
+    def __init__(self, net, pred_cast_fp32=False, input_indices=None, label_indices=None):
         super().__init__(auto_prefix=False)
         self._net = net
-        self._loss_fn = loss_fn
         # TODO: get this automatically from net and loss func
         self.input_indices = input_indices
         self.label_indices = label_indices
