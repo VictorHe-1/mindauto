@@ -120,6 +120,7 @@ class NuScenesDataset(Custom3DDataset):
                  load_interval=1,
                  with_velocity=True,
                  modality=None,
+                 output_columns=None,
                  box_type_3d='LiDAR',
                  filter_empty_gt=True,
                  test_mode=False,
@@ -133,6 +134,7 @@ class NuScenesDataset(Custom3DDataset):
             pipeline=pipeline,
             classes=classes,
             modality=modality,
+            output_columns=output_columns,
             box_type_3d=box_type_3d,
             filter_empty_gt=filter_empty_gt,
             test_mode=test_mode)
@@ -531,8 +533,7 @@ class NuScenesDataset(Custom3DDataset):
                 with_label=False),
             dict(type='Collect3D', keys=['points'])
         ]
-        global_config = dict(is_train=True)
-        return create_transforms(pipeline, global_config)  # TODO: replace Compose method
+        return create_transforms(pipeline)  # TODO: replace Compose method
 
     def show(self, results, out_dir, show=True, pipeline=None):
         """Results visualization.

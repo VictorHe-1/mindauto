@@ -52,7 +52,7 @@ class Custom3DDataset(object):
                  test_mode=False):
         super().__init__()
         self.data_root = data_root
-        self.ann_file = ann_file
+        self.ann_file = osp.join(data_root, ann_file)
         self.test_mode = test_mode
         self.modality = modality
         self.filter_empty_gt = filter_empty_gt
@@ -64,8 +64,7 @@ class Custom3DDataset(object):
         self.output_columns = output_columns
 
         if pipeline is not None:
-            global_config = dict(is_train=not test_mode)
-            self.transforms = create_transforms(pipeline, global_config)
+            self.transforms = create_transforms(pipeline)
         else:
             raise ValueError("No transform pipeline is specified!")
 
@@ -304,8 +303,8 @@ class Custom3DDataset(object):
                     'errors when data is on ceph')
                 return self._build_default_pipeline()
             loading_pipeline = get_loading_pipeline(self.transforms)
-            return create_transforms(loading_pipeline, dict(is_train=is_train))
-        return create_transforms(pipeline, dict(is_train=is_train))
+            return create_transforms(loading_pipeline)
+        return create_transforms(pipeline)
 
     def _extract_data(self, index, pipeline, key, load_annos=False):
         """Load data using input pipeline and extract data according to key.

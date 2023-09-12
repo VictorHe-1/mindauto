@@ -8,13 +8,14 @@ import numpy as np
 
 from .loading_transforms import *
 from .transforms_3d import *
+from .formating import *
 
 __all__ = ["create_transforms", "run_transforms"]
 _logger = logging.getLogger(__name__)
 
 
 # TODO: use class with __call__, to perform transformation
-def create_transforms(transform_pipeline: List, global_config: Dict = None):
+def create_transforms(transform_pipeline: List):
     """
     Create a squence of callable transforms.
 
@@ -37,10 +38,7 @@ def create_transforms(transform_pipeline: List, global_config: Dict = None):
             assert len(transform_config) == 1, "yaml format error in transforms"
             trans_name = list(transform_config.keys())[0]
             param = {} if transform_config[trans_name] is None else transform_config[trans_name]
-            if global_config is not None:
-                param.update(global_config)
             # TODO: assert undefined transform class
-
             transform = eval(trans_name)(**param)
             transforms.append(transform)
         elif callable(transform_config):

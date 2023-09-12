@@ -46,7 +46,6 @@ def build_dataset(
             - num_workers (int): number of subprocesses used to fetch the dataset in parallel.
         num_shards (int, *optional*): num of devices for distributed mode
         shard_id (int, *optional*): device id
-        is_train (boolean): whether it is in training stage
         **kwargs: optional args for extension. If `refine_batch_size=True` is given in kwargs, the batch size will be
             refined to be divisable to avoid
             droping remainding data samples in graph model, typically used for precise evaluation.
@@ -126,8 +125,7 @@ def build_dataset(
     dataset_class_name = dataset_config.pop("type")
     assert dataset_class_name in supported_dataset_types, "Invalid dataset name"
     dataset_class = eval(dataset_class_name)
-    dataset_args = dict(is_train=is_train, **dataset_config)
-    dataset = dataset_class(**dataset_args)
+    dataset = dataset_class(**dataset_config)
 
     dataset_column_names = dataset.get_output_columns()
 

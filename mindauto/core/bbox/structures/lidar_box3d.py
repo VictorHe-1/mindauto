@@ -219,24 +219,24 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
                           & (self.tensor[:, 1] < box_range[3]))
         return in_range_flags
 
-    # def convert_to(self, dst, rt_mat=None):
-    #     """Convert self to ``dst`` mode.
-    #
-    #     Args:
-    #         dst (:obj:`Box3DMode`): the target Box mode
-    #         rt_mat (np.ndarray | ms.Tensor): The rotation and translation
-    #             matrix between different coordinates. Defaults to None.
-    #             The conversion from ``src`` coordinates to ``dst`` coordinates
-    #             usually comes along the change of sensors, e.g., from camera
-    #             to LiDAR. This requires a transformation matrix.
-    #
-    #     Returns:
-    #         :obj:`BaseInstance3DBoxes`: \
-    #             The converted box of the same type in the ``dst`` mode.
-    #     """
-    #     from .box_3d_mode import Box3DMode
-    #     return Box3DMode.convert(
-    #         box=self, src=Box3DMode.LIDAR, dst=dst, rt_mat=rt_mat)
+    def convert_to(self, dst, rt_mat=None):
+        """Convert self to ``dst`` mode.
+
+        Args:
+            dst (:obj:`Box3DMode`): the target Box mode
+            rt_mat (np.ndarray | ms.Tensor): The rotation and translation
+                matrix between different coordinates. Defaults to None.
+                The conversion from ``src`` coordinates to ``dst`` coordinates
+                usually comes along the change of sensors, e.g., from camera
+                to LiDAR. This requires a transformation matrix.
+
+        Returns:
+            :obj:`BaseInstance3DBoxes`: \
+                The converted box of the same type in the ``dst`` mode.
+        """
+        from .box_3d_mode import Box3DMode
+        return Box3DMode.convert(
+            box=self, src=Box3DMode.LIDAR, dst=dst, rt_mat=rt_mat)
 
     def enlarged_box(self, extra_width):
         """Enlarge the length, width and height boxes.

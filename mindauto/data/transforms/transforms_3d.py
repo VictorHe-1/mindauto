@@ -1,9 +1,12 @@
+import ast
+from copy import deepcopy
 import warnings
+
 import numpy as np
 from numpy import random
+
 import common
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
-from copy import deepcopy
 
 
 class PhotoMetricDistortionMultiViewImage:
@@ -399,14 +402,14 @@ class MultiScaleFlipAug3D(object):
                  flip_direction='horizontal',
                  pcd_horizontal_flip=False,
                  pcd_vertical_flip=False):
-        global_config = dict(is_train=False)
         from .transforms_factory import create_transforms
-        self.transforms = create_transforms(transforms, global_config)
+        self.transforms = create_transforms(transforms)
+        if isinstance(img_scale, str):
+            img_scale = ast.literal_eval(img_scale)
         self.img_scale = img_scale if isinstance(img_scale,
                                                  list) else [img_scale]
         self.pts_scale_ratio = pts_scale_ratio \
             if isinstance(pts_scale_ratio, list) else [float(pts_scale_ratio)]
-
         assert common.is_list_of(self.img_scale, tuple)
         assert common.is_list_of(self.pts_scale_ratio, float)
 
