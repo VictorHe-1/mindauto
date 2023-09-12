@@ -1,3 +1,4 @@
+import mindspore as ms
 from .base_points import BasePoints
 
 
@@ -43,11 +44,12 @@ class LiDARPoints(BasePoints):
             torch.Tensor: Indicating whether each point is inside \
                 the reference range.
         """
-        in_range_flags = ((self.tensor[:, 0] > point_range[0])
-                          & (self.tensor[:, 1] > point_range[1])
-                          & (self.tensor[:, 0] < point_range[2])
-                          & (self.tensor[:, 1] < point_range[3]))
-        return in_range_flags
+        numpy_tensor = self.tensor.asnumpy()
+        in_range_flags = ((numpy_tensor[:, 0] > point_range[0])
+                          & (numpy_tensor[:, 1] > point_range[1])
+                          & (numpy_tensor[:, 0] < point_range[2])
+                          & (numpy_tensor[:, 1] < point_range[3]))
+        return ms.Tensor(in_range_flags)
 
     def convert_to(self, dst, rt_mat=None):
         """Convert self to ``dst`` mode.
