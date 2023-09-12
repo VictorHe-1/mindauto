@@ -12,7 +12,7 @@ from mindauto.core.visualizer import show_result
 
 from mindauto.core.bbox.structures import Box3DMode, LiDARInstance3DBoxes, Coord3DMode
 from .base_dataset import Custom3DDataset
-from transforms import create_transforms
+from .transforms import create_transforms
 
 
 class NuScenesDataset(Custom3DDataset):

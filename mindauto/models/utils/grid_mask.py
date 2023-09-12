@@ -1,4 +1,4 @@
-import mindsporea as ms
+import mindspore as ms
 from mindspore import nn
 import numpy as np
 from PIL import Image

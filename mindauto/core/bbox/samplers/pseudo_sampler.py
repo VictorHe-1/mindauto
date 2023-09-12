@@ -1,4 +1,3 @@
-import torch
 from mindspore import ops
 import mindspore as ms
 
@@ -25,8 +24,8 @@ class PseudoSampler(BaseSampler):
 
         Args:
             assign_result (:obj:`AssignResult`): Assigned results
-            bboxes (torch.Tensor): Bounding boxes
-            gt_bboxes (torch.Tensor): Ground truth boxes
+            bboxes (mindspore.Tensor): Bounding boxes
+            gt_bboxes (mindspore.Tensor): Ground truth boxes
 
         Returns:
             :obj:`SamplingResult`: sampler results
