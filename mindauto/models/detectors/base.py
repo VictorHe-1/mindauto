@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 from collections import OrderedDict
 
 import mindspore as ms
@@ -9,7 +9,7 @@ import numpy as np
 from mindauto.core.visualizer import imshow_det_bboxes
 
 
-class BaseDetector(nn.Cell, metaclass=ABCMeta):
+class BaseDetector(nn.Cell):
     """Base class for detectors."""
 
     def __init__(self, init_cfg=None):

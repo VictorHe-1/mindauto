@@ -8,7 +8,6 @@ from mindauto.core.bbox.assigners import build_assigner
 from mindauto.core.bbox.samplers import build_sampler
 from mindauto.models.transformer import FFN, build_transformer
 from .anchor_free_head import AnchorFreeHead
-from .builder import build_positional_encoding
 from .dist_utils import reduce_mean
 
 
@@ -146,6 +145,7 @@ class DETRHead(AnchorFreeHead):
         # since it brings inconvenience when the initialization of
         # `AnchorFreeHead` is called.
         super(AnchorFreeHead, self).__init__(init_cfg)
+        from .builder import build_positional_encoding
         self.bg_cls_weight = 0
         self.sync_cls_avg_factor = sync_cls_avg_factor
         class_weight = loss_cls.get('class_weight', None)

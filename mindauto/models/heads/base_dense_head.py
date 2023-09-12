@@ -1,9 +1,9 @@
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 
 from mindspore import nn
 
 
-class BaseDenseHead(nn.Cell, metaclass=ABCMeta):
+class BaseDenseHead(nn.Cell):
     """Base class for DenseHeads."""
 
     def __init__(self, init_cfg=None):
