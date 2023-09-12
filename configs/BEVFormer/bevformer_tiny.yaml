@@ -1,6 +1,6 @@
 system:
   mode: 0 # 0 for graph mode, 1 for pynative mode in MindSpore
-  distribute: True
+  distribute: False
   amp_level: 'O0'
   seed: 42
   val_while_train: False
@@ -177,9 +177,8 @@ train: #  ema: True
   dataset_sink_mode: True
   dataset:
     type: &dataset_type CustomNuScenesDataset
-    dataset_root: ../ocr_datasets
-    data_dir: ic15/ch4_training_images
-    label_file: nuscenes_infos_temporal_train.pkl
+    dataset_root: ./data
+    label_file: nuscenes/nuscenes_infos_temporal_train.pkl
     sample_ratio: 1.0
     transform_pipeline:
       - LoadMultiViewImageFromFiles:
@@ -224,9 +223,8 @@ eval:
   dataset_sink_mode: False
   dataset:
     type: *dataset_type
-    dataset_root: ../ocr_datasets
-    data_dir: ic15/ch4_test_images
-    label_file: nuscenes_infos_temporal_val.pkl
+    dataset_root: ./data
+    label_file: nuscenes/nuscenes_infos_temporal_val.pkl
     sample_ratio: 1.0
     transform_pipeline:
       - LoadMultiViewImageFromFiles:
