@@ -227,23 +227,26 @@ eval:
     pipeline:
       - LoadMultiViewImageFromFiles:
           to_float32: True
+      - PhotoMetricDistortionMultiViewImage:
+      - LoadAnnotations3D:
+          with_bbox_3d: True
+          with_label_3d: True
+          with_attr_label: False
+      - ObjectRangeFilter:
+          point_cloud_range: *point_cloud_range
+      - ObjectNameFilter:
+          classes: *class_names
       - NormalizeMultiviewImage: *img_norm_cfg
-      - MultiScaleFlipAug3D:
-          img_scale: (1600, 900)
-          pts_scale_ratio: 1
-          flip: False
-          transforms:
-            - RandomScaleImageMultiViewImage:
-                scales: [ 0.5 ]
-            - PadMultiViewImage:
-                size_divisor: 32
-            - DefaultFormatBundle3D:
-                class_names: *class_names
-                with_label: False
-            - CustomCollect3D:
-                keys: [ 'img' ]
+      - RandomScaleImageMultiViewImage:
+          scales: [ 0.5 ]
+      - PadMultiViewImage:
+          size_divisor: 32
+      - DefaultFormatBundle3D:
+          class_names: *class_names
+      - CustomCollect3D:
+          keys: [ 'gt_bboxes_3d', 'gt_labels_3d', 'img' ]
     #  the order of the dataloader list, matching the network input and the labels for evaluation
-    output_columns: [ 'img_metas', 'img']
+    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d','img' ]
     #    net_input_column_index: [ 0 ]
     #    label_column_index: [ 1, 2]  # input indices marked as label
     bev_size: *bev_size
@@ -255,3 +258,22 @@ eval:
     batch_size: 1
     drop_remainder: False
     num_workers: 1
+
+test_pipeline:
+  - LoadMultiViewImageFromFiles:
+      to_float32: True
+  - NormalizeMultiviewImage: *img_norm_cfg
+  - MultiScaleFlipAug3D:
+      img_scale: (1600, 900)
+      pts_scale_ratio: 1
+      flip: False
+      transforms:
+        - RandomScaleImageMultiViewImage:
+            scales: [ 0.5 ]
+        - PadMultiViewImage:
+            size_divisor: 32
+        - DefaultFormatBundle3D:
+            class_names: *class_names
+            with_label: False
+        - CustomCollect3D:
+            keys: [ 'img' ]
