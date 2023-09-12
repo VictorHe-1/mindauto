@@ -1,5 +1,4 @@
 from .base_points import BasePoints
-from mindauto.core.bbox.structures import Coord3DMode
 
 
 class LiDARPoints(BasePoints):
@@ -65,5 +64,6 @@ class LiDARPoints(BasePoints):
             :obj:`BasePoints`: The converted point of the same type \
                 in the `dst` mode.
         """
+        from mindauto.core.bbox.structures import Coord3DMode
         return Coord3DMode.convert_point(
             point=self, src=Coord3DMode.LIDAR, dst=dst, rt_mat=rt_mat)

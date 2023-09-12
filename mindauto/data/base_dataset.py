@@ -5,8 +5,8 @@ from os import path as osp
 
 from mindauto.core.bbox.structures import get_box_type
 from common import load_from_serialized, dump, list_from_file
-from .utils import extract_result_dict, get_loading_pipeline
-from .transforms.transforms_factory import create_transforms, run_transforms
+from .transforms import extract_result_dict, get_loading_pipeline
+from .transforms import create_transforms, run_transforms
 
 __all__ = ["Custom3DDataset"]
 

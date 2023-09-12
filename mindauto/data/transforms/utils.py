@@ -1,6 +1,6 @@
-from transforms.loading_transforms import LoadAnnotations3D, LoadMultiViewImageFromFiles
-from transforms.formating import DefaultFormatBundle3D
-from transforms.transforms_3d import MultiScaleFlipAug3D
+from .loading_transforms import LoadAnnotations3D, LoadMultiViewImageFromFiles
+from .formating import DefaultFormatBundle3D
+from .transforms_3d import MultiScaleFlipAug3D
 
 
 def extract_result_dict(results, key):

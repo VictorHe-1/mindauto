@@ -1,9 +1,6 @@
 import numpy as np
 from mindspore import ops
 
-from .box_3d_mode import Box3DMode
-from .lidar_box3d import LiDARInstance3DBoxes
-
 
 def get_box_type(box_type):
     """Get the type and mode of box structure.
@@ -15,6 +12,8 @@ def get_box_type(box_type):
     Returns:
         tuple: Box type and box mode.
     """
+    from .box_3d_mode import Box3DMode
+    from .lidar_box3d import LiDARInstance3DBoxes
     box_type_lower = box_type.lower()
     if box_type_lower == 'lidar':
         box_type_3d = LiDARInstance3DBoxes

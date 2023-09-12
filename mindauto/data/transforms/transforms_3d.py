@@ -4,7 +4,6 @@ from numpy import random
 import common
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
 from copy import deepcopy
-from .transforms_factory import create_transforms, run_transforms
 
 
 class PhotoMetricDistortionMultiViewImage:
@@ -401,6 +400,7 @@ class MultiScaleFlipAug3D(object):
                  pcd_horizontal_flip=False,
                  pcd_vertical_flip=False):
         global_config = dict(is_train=False)
+        from .transforms_factory import create_transforms
         self.transforms = create_transforms(transforms, global_config)
         self.img_scale = img_scale if isinstance(img_scale,
                                                  list) else [img_scale]
@@ -436,6 +436,7 @@ class MultiScaleFlipAug3D(object):
             dict: The result dict contains the data that is augmented with \
                 different scales and flips.
         """
+        from .transforms_factory import run_transforms
         aug_data = []
 
         # modified from `flip_aug = [False, True] if self.flip else [False]`

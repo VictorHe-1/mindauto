@@ -1,7 +1,10 @@
+from abc import abstractmethod
+
 import numpy as np
 import mindspore as ms
 from mindspore import ops
-from abc import abstractmethod
+
+from .utils import limit_period, xywhr2xyxyr
 
 
 class BaseInstance3DBoxes(object):
@@ -221,7 +224,6 @@ class BaseInstance3DBoxes(object):
             offset (float): The offset of the yaw.
             period (float): The expected period.
         """
-        from .utils import limit_period
         self.tensor[:, 6] = limit_period(self.tensor[:, 6], offset, period)
 
     def nonempty(self, threshold: float = 0.0):
@@ -370,7 +372,6 @@ class BaseInstance3DBoxes(object):
     #     Returns:
     #         ms.Tensor: Calculated iou of boxes' heights.
     #     """
-    #     from .utils import xywhr2xyxyr
     #     assert isinstance(boxes1, BaseInstance3DBoxes)
     #     assert isinstance(boxes2, BaseInstance3DBoxes)
     #     assert type(boxes1) == type(boxes2), '"boxes1" and "boxes2" should' \
