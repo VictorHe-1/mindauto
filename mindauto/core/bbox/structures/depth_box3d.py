@@ -1,6 +1,4 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
-import torch
 import mindspore as ms
 from mindspore import ops
 
@@ -33,7 +31,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
     easier to understand and convert between each other.
 
     Attributes:
-        tensor (torch.Tensor): Float matrix of N x box_dim.
+        tensor (mindspore.Tensor): Float matrix of N x box_dim.
         box_dim (int): Integer indicates the dimension of a box
             Each row is (x, y, z, x_size, y_size, z_size, yaw, ...).
         with_yaw (bool): If True, the value of yaw will be set to 0 as minmax
@@ -42,7 +40,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
 
     @property
     def gravity_center(self):
-        """torch.Tensor: A tensor with center of each box."""
+        """mindspore.Tensor: A tensor with center of each box."""
         bottom_center = self.bottom_center
         gravity_center = ops.zeros_like(bottom_center)
         gravity_center[:, :2] = bottom_center[:, :2]
@@ -51,7 +49,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
 
     @property
     def corners(self):
-        """torch.Tensor: Coordinates of corners of all the boxes
+        """mindspore.Tensor: Coordinates of corners of all the boxes
         in shape (N, 8, 3).
 
         Convert the boxes to corners in clockwise order, in form of
@@ -91,13 +89,13 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
 
     @property
     def bev(self):
-        """torch.Tensor: A n x 5 tensor of 2D BEV box of each box
+        """mindspore.Tensor: A n x 5 tensor of 2D BEV box of each box
         in XYWHR format."""
         return self.tensor[:, [0, 1, 3, 4, 6]]
 
     @property
     def nearest_bev(self):
-        """torch.Tensor: A tensor of 2D BEV box of each box
+        """mindspore.Tensor: A tensor of 2D BEV box of each box
         without rotation."""
         # Obtain BEV boxes with rotation in XYWHR format
         bev_rotated_boxes = self.bev
@@ -121,9 +119,9 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
         rotation matrix.
 
         Args:
-            angle (float | torch.Tensor | np.ndarray):
+            angle (float | mindspore.Tensor | np.ndarray):
                 Rotation angle or rotation matrix.
-            points (torch.Tensor, numpy.ndarray, :obj:`BasePoints`, optional):
+            points (mindspore.Tensor, numpy.ndarray, :obj:`BasePoints`, optional):
                 Points to rotate. Defaults to None.
 
         Returns:
@@ -182,11 +180,11 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
 
         Args:
             bev_direction (str): Flip direction (horizontal or vertical).
-            points (torch.Tensor, numpy.ndarray, :obj:`BasePoints`, None):
+            points (mindspore.Tensor, numpy.ndarray, :obj:`BasePoints`, None):
                 Points to flip. Defaults to None.
 
         Returns:
-            torch.Tensor, numpy.ndarray or None: Flipped points.
+            mindspore.Tensor, numpy.ndarray or None: Flipped points.
         """
         assert bev_direction in ('horizontal', 'vertical')
         if bev_direction == 'horizontal':
@@ -213,7 +211,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
         """Check whether the boxes are in the given range.
 
         Args:
-            box_range (list | torch.Tensor): The range of box
+            box_range (list | mindspore.Tensor): The range of box
                 (x_min, y_min, x_max, y_max).
 
         Note:
@@ -222,7 +220,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
             polygon, we try to reduce the burdun for simpler cases.
 
         Returns:
-            torch.Tensor: Indicating whether each box is inside \
+            mindspore.Tensor: Indicating whether each box is inside \
                 the reference range.
         """
         in_range_flags = ((self.tensor[:, 0] > box_range[0])
@@ -236,7 +234,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
 
         Args:
             dst (:obj:`Box3DMode`): The target Box mode.
-            rt_mat (np.ndarray | torch.Tensor): The rotation and translation
+            rt_mat (np.ndarray | mindspore.Tensor): The rotation and translation
                 matrix between different coordinates. Defaults to None.
                 The conversion from ``src`` coordinates to ``dst`` coordinates
                 usually comes along the change of sensors, e.g., from camera
@@ -258,7 +256,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
     #             3 dimensions are [x, y, z] in LiDAR coordinate.
     #
     #     Returns:
-    #         torch.Tensor: The index of boxes each point lies in with shape \
+    #         mindspore.Tensor: The index of boxes each point lies in with shape \
     #             of (B, M, T).
     #     """
     #     from .box_3d_mode import Box3DMode
@@ -282,7 +280,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
         """Enlarge the length, width and height boxes.
 
         Args:
-            extra_width (float | torch.Tensor): Extra width to enlarge the box.
+            extra_width (float | mindspore.Tensor): Extra width to enlarge the box.
 
         Returns:
             :obj:`LiDARInstance3DBoxes`: Enlarged boxes.
@@ -297,7 +295,7 @@ class DepthInstance3DBoxes(BaseInstance3DBoxes):
         """Compute surface and line center of bounding boxes.
 
         Returns:
-            torch.Tensor: Surface and line center of bounding boxes.
+            mindspore.Tensor: Surface and line center of bounding boxes.
         """
         obj_size = self.dims
         center = self.gravity_center.view(-1, 1, 3)

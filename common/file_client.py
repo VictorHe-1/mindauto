@@ -1,4 +1,3 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 import inspect
 import os
 from os import path as osp

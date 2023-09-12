@@ -1,10 +1,7 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 import mindspore as ms
 from mindspore import ops
 from abc import abstractmethod
-
-from .utils import limit_period, xywhr2xyxyr
 
 
 class BaseInstance3DBoxes(object):
@@ -224,6 +221,7 @@ class BaseInstance3DBoxes(object):
             offset (float): The offset of the yaw.
             period (float): The expected period.
         """
+        from .utils import limit_period
         self.tensor[:, 6] = limit_period(self.tensor[:, 6], offset, period)
 
     def nonempty(self, threshold: float = 0.0):
@@ -343,7 +341,7 @@ class BaseInstance3DBoxes(object):
         assert isinstance(boxes1, BaseInstance3DBoxes)
         assert isinstance(boxes2, BaseInstance3DBoxes)
         assert type(boxes1) == type(boxes2), '"boxes1" and "boxes2" should' \
-            f'be in the same type, got {type(boxes1)} and {type(boxes2)}.'
+                                             f'be in the same type, got {type(boxes1)} and {type(boxes2)}.'
 
         boxes1_top_height = boxes1.top_height.view(-1, 1)
         boxes1_bottom_height = boxes1.bottom_height.view(-1, 1)
@@ -351,7 +349,7 @@ class BaseInstance3DBoxes(object):
         boxes2_bottom_height = boxes2.bottom_height.view(1, -1)
 
         heighest_of_bottom = ops.max(boxes1_bottom_height,
-                                       boxes2_bottom_height)
+                                     boxes2_bottom_height)
         lowest_of_top = ops.min(boxes1_top_height, boxes2_top_height)
         overlaps_h = ops.clamp(lowest_of_top - heighest_of_bottom, min=0)
         return overlaps_h
@@ -372,6 +370,7 @@ class BaseInstance3DBoxes(object):
     #     Returns:
     #         ms.Tensor: Calculated iou of boxes' heights.
     #     """
+    #     from .utils import xywhr2xyxyr
     #     assert isinstance(boxes1, BaseInstance3DBoxes)
     #     assert isinstance(boxes2, BaseInstance3DBoxes)
     #     assert type(boxes1) == type(boxes2), '"boxes1" and "boxes2" should' \

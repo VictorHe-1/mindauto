@@ -1,4 +1,3 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 from .base_points import BasePoints
 from mindauto.core.bbox.structures import Coord3DMode
 
