@@ -4,7 +4,6 @@ import warnings
 from mindspore import nn
 import mindspore as ms
 
-from .builder import build_attention, build_feedforward_network
 from common import ConfigDict, build_norm_layer
 
 
@@ -56,7 +55,7 @@ class MyCustomBaseTransformerLayer(nn.Cell):
                  norm_cfg=dict(type='LN'),
                  batch_first=True,
                  **kwargs):
-
+        from .builder import build_attention, build_feedforward_network
         deprecated_args = dict(
             feedforward_channels='feedforward_channels',
             ffn_dropout='ffn_drop',
@@ -127,7 +126,7 @@ class MyCustomBaseTransformerLayer(nn.Cell):
                 assert ffn_cfgs[ffn_index]['embed_dims'] == self.embed_dims
 
             self.ffns.append(
-                build_feedforward_network(ffn_cfgs[ffn_index]))  # TODO
+                build_feedforward_network(ffn_cfgs[ffn_index]))
 
         self.norms = nn.CellList()
         num_norms = operation_order.count('norm')

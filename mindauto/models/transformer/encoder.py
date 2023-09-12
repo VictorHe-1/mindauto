@@ -6,7 +6,7 @@ import mindspore as ms
 from mindspore import ops
 
 from .custom_base_transformer_layer import MyCustomBaseTransformerLayer
-from .transformer import TransformerLayerSequence
+from .base_transformer import TransformerLayerSequence
 
 
 class BEVFormerEncoder(TransformerLayerSequence):
