@@ -55,10 +55,10 @@ model:
   type: 'BEVFormer'
   use_grid_mask: True
   video_test_mode: True
-  backbone:
+  img_backbone:
     type: resnet50
     pretrained: True #https://download.mindspore.cn/toolkits/mindcv/mobilenet/mobilenetv3/mobilenet_v3_large_050_no_scale_se_v2_expand-3c4047ac.ckpt
-  neck:
+  img_neck:
     type: FPN
     in_channels: [2048]
     out_channels: *dim
@@ -66,7 +66,7 @@ model:
     add_extra_convs: 'on_output'
     num_outs: *num_levels
     relu_before_extra_convs: True
-  head:
+  pts_bbox_head:
     type: BEVFormerHead
     bev_h: *bev_h
     bev_w: *bev_w
