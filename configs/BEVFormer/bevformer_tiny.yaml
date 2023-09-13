@@ -174,7 +174,7 @@ loss_scaler:
 
 train: #  ema: True
   ckpt_save_dir: './tmp_det'
-  dataset_sink_mode: True
+  dataset_sink_mode: False
   dataset:
     type: &dataset_type CustomNuScenesDataset
     data_root: ./data
@@ -206,7 +206,7 @@ train: #  ema: True
     test_mode: False
     use_valid_flag: True
     bev_size: &bev_size [50, 50]
-    queue_length: 3
+    queue_length: &queue_length 3
     box_type_3d: LiDAR
     output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d','img' ]
 #    net_input_column_index: [ 0 ] # input indices for network forward func in output_columns
@@ -249,6 +249,7 @@ eval:
     output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d','img' ]
     #    net_input_column_index: [ 0 ]
     #    label_column_index: [ 1, 2]  # input indices marked as label
+    train_queue_length: *queue_length
     bev_size: *bev_size
     classes: *class_names
     modality: *input_modality
