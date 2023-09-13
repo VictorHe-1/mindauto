@@ -1,8 +1,55 @@
 import copy
 
+import numpy as np
+import mindspore as ms
+
 from mindauto.core.bbox.transforms import bbox3d2result
 from mindauto.models.utils.grid_mask import GridMask
+from mindauto.core.bbox.structures import LiDARInstance3DBoxes
 from .detectors import MVXTwoStageDetector
+
+
+def split_array(array):
+    split_list = np.split(array, array.shape[0])
+    return split_list
+
+
+def restore_img_metas(kwargs):
+    # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
+    #                     'lidar2img': list, 'scene_token': str, 'box_type_3d: type}
+    from mindauto.core.bbox.structures import LiDARInstance3DBoxes
+    type_mapping = {"<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": type(LiDARInstance3DBoxes)}
+    new_kwargs = {}
+    new_kwargs['img_metas'] = {}
+    for key, value in kwargs.items():
+        if key.startswith("img_metas"):
+            key_list = key.split("/")
+            middle_key = int(key_list[1])
+            last_key = key_list[-1]
+            if middle_key not in new_kwargs['img_metas']:
+                new_kwargs['img_metas'][middle_key] = {}
+            if last_key in ['prev_bev_exists', 'scene_token', 'box_type_3d']:
+                new_kwargs['img_metas'][middle_key][last_key] = value.item()
+            elif last_key == 'lidar2img':
+                new_kwargs['img_metas'][middle_key][last_key] = split_array(value)
+            elif last_key == 'box_type_3d':
+                new_kwargs['img_metas'][middle_key][last_key] = type_mapping[value]
+            else:
+                new_kwargs['img_metas'][middle_key][last_key] = value
+        else:
+            new_kwargs[key] = value
+    return new_kwargs
+
+
+def restore_3d_bbox(kwargs):
+    tensor = ms.Tensor(kwargs['tensor'].copy())
+    box_dim = kwargs['box_dim'].item()
+    with_yaw = kwargs['with_yaw'].item()
+    origin = tuple(kwargs['origin'].tolist())
+    kwargs['gt_bboxes_3d'] = LiDARInstance3DBoxes(tensor, box_dim, with_yaw, origin)
+    for delete_key in ['tensor', 'box_dim', 'with_yaw', 'origin']:
+        kwargs.pop(delete_key)
+    return kwargs
 
 
 class BEVFormer(MVXTwoStageDetector):
@@ -124,7 +171,7 @@ class BEVFormer(MVXTwoStageDetector):
         dummy_metas = None
         return self.forward_test(img=img, img_metas=[[dummy_metas]])
 
-    def forward(self, return_loss=True, **kwargs):
+    def construct(self, return_loss=True, **kwargs):
         """Calls either forward_train or forward_test depending on whether
         return_loss=True.
         Note this setting will change the expected inputs. When
@@ -134,6 +181,8 @@ class BEVFormer(MVXTwoStageDetector):
         list[list[dict]]), with the outer list indicating test time
         augmentations.
         """
+        kwargs = restore_img_metas(kwargs)
+        kwargs = restore_3d_bbox(kwargs)
         if return_loss:
             return self.forward_train(**kwargs)
         else:

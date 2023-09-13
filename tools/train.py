@@ -92,7 +92,6 @@ def main(cfg):
         is_train=True,
     )
     num_batches = loader_train.get_dataset_size()
-    breakpoint()
     loader_eval = None
     if cfg.system.val_while_train:
         loader_eval = build_dataset(
@@ -103,7 +102,7 @@ def main(cfg):
             is_train=False,
             refine_batch_size=True,
         )
-
+    # item_list = [item for item in loader_train] item: list[Tensor] 21 elements
     # create model
     amp_level = cfg.system.get("amp_level", "O0")
     network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None), amp_level=amp_level) # TODO

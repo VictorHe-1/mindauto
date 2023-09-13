@@ -35,6 +35,10 @@ class BaseInstance3DBoxes(object):
     """
 
     def __init__(self, tensor, box_dim=7, with_yaw=True, origin=(0.5, 0.5, 0)):
+        self.input_tensor = tensor.copy()
+        self.input_box_dim = box_dim
+        self.input_with_yaw = with_yaw
+        self.input_origin = origin
         tensor = ms.Tensor(tensor, dtype=ms.float32)
         if ops.numel(tensor) == 0:
             # Use reshape, so we don't end up creating a new tensor that

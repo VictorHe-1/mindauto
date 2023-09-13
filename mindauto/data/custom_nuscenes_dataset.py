@@ -51,13 +51,13 @@ class CustomNuScenesDataset(NuScenesDataset):
         return self.union2one(queue)
 
     def union2one(self, queue):
-        imgs_list = [each['img'].data for each in queue]
+        imgs_list = [each['img'] for each in queue]
         metas_map = {}
         prev_scene_token = None
         prev_pos = None
         prev_angle = None
         for i, each in enumerate(queue):
-            metas_map[i] = each['img_metas'].data
+            metas_map[i] = each['img_metas']
             if metas_map[i]['scene_token'] != prev_scene_token:
                 metas_map[i]['prev_bev_exists'] = False
                 prev_scene_token = metas_map[i]['scene_token']
@@ -161,6 +161,44 @@ class CustomNuScenesDataset(NuScenesDataset):
 
         return input_dict
 
+    # ms.GeneratorDataset must have (numpy.ndarray, ...)
+    def convert_data_to_numpy(self, data):
+        # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
+        ordered_key = ['gt_labels_3d', 'img']
+        queue_length = 0
+        for key, value in data['img_metas'].items():
+            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
+                new_key_list = ['img_metas', str(key), sub_key]
+                new_key = "/".join(new_key_list)
+                if sub_key == 'box_type_3d':
+                    data[new_key] = np.array(str(value[sub_key]))  # MS limit: convert object to str
+                else:
+                    data[new_key] = np.array(value[sub_key])
+
+                ordered_key_list = ['img_metas', str(queue_length), sub_key]
+                ordered_key.append("/".join(ordered_key_list))
+            queue_length += 1
+        data.pop('img_metas')
+
+        # convert gt_bboxes_3d (LiDARInstance3D) to numpy array
+        gt_bbox_3d = data['gt_bboxes_3d']
+        data['tensor'] = gt_bbox_3d.input_tensor.asnumpy()
+        data['box_dim'] = np.array(gt_bbox_3d.input_box_dim)
+        data['with_yaw'] = np.array(gt_bbox_3d.with_yaw)
+        data['origin'] = np.array(gt_bbox_3d.input_origin)
+        ordered_key.extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
+        data.pop('gt_bboxes_3d')
+
+        if 'gt_labels_3d' in data:
+            data['gt_labels_3d'] = data['gt_labels_3d'].asnumpy()
+        data['img'] = data['img'].asnumpy()
+
+        numpy_data = []
+        for key in ordered_key:
+            numpy_data.append(data[key])
+        return tuple(numpy_data)
+
+
     def __getitem__(self, idx):
         """Get item from infos according to the given index.
         Returns:
@@ -174,7 +212,9 @@ class CustomNuScenesDataset(NuScenesDataset):
             if data is None:
                 idx = self._rand_another(idx)
                 continue
-            return data
+
+            numpy_data = self.convert_data_to_numpy(data)
+            return numpy_data
 
     def _evaluate_single(self,
                          result_path,

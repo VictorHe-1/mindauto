@@ -125,10 +125,26 @@ def build_dataset(
     dataset_class_name = dataset_config.pop("type")
     assert dataset_class_name in supported_dataset_types, "Invalid dataset name"
     dataset_class = eval(dataset_class_name)
+
+    # Add some columns for img_meta conversion
+    dataset_config['output_columns'].pop(0)  # delete img_metas
+    dataset_config['output_columns'].pop(0)  # delete gt_bboxes_3d
+    if is_train:
+        for i in range(dataset_config['queue_length']):
+            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
+                combined_columns = 'img_metas/'+str(i) + '/' + sub_key
+                dataset_config['output_columns'].append(combined_columns)
+    else:
+        for i in range(dataset_config['train_queue_length'] + 1):
+            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
+                combined_columns = 'img_metas/'+str(i) + '/' + sub_key
+                dataset_config['output_columns'].append(combined_columns)
+        dataset_config.pop('train_queue_length')
+
+    dataset_config['output_columns'].extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
     dataset = dataset_class(**dataset_config)
 
     dataset_column_names = dataset.get_output_columns()
-
     # Generate source dataset (source w.r.t. the dataset.map pipeline)
     # based on python callable numpy dataset in parallel
     ds = ms.dataset.GeneratorDataset(
