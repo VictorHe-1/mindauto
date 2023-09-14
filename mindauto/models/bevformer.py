@@ -97,6 +97,9 @@ class BEVFormer(MVXTwoStageDetector):
             'prev_angle': 0,
         }
 
+    def init_weights(self):
+        self.pts_bbox_head.init_weights()
+
     def extract_img_feat(self, img, img_metas, len_queue=None):
         """Extract features of images."""
         B = img.shape[0]
