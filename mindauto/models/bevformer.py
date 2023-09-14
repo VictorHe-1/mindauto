@@ -194,7 +194,7 @@ class BEVFormer(MVXTwoStageDetector):
     def obtain_history_bev(self, imgs_queue, img_metas_list):
         """Obtain history BEV features iteratively. To save GPU memory, gradients are not calculated.
         """
-        self.eval()  # TODO
+        self.set_train(False)
 
         prev_bev = None
         bs, len_queue, num_cams, C, H, W = imgs_queue.shape
@@ -209,7 +209,7 @@ class BEVFormer(MVXTwoStageDetector):
             prev_bev = self.pts_bbox_head(
                 img_feats, img_metas, prev_bev, only_bev=True)
 
-        self.train()  # TODO
+        self.set_train(True)
         return prev_bev
 
     def forward_train(self,
