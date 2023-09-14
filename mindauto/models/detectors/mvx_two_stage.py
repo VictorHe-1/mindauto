@@ -41,8 +41,7 @@ class MVXTwoStageDetector(Base3DDetector):
             self.pts_bbox_head = builder.build_head(pts_bbox_head)
 
         if img_backbone:
-            backbone_name = img_backbone.pop('name')
-            self.img_backbone = builder.build_backbone(name=backbone_name, **img_backbone)
+            self.img_backbone = builder.build_backbone(**img_backbone)
         if img_neck is not None:
             self.img_neck = builder.build_neck(img_neck)
 

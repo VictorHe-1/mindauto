@@ -56,8 +56,8 @@ model:
   use_grid_mask: True
   video_test_mode: True
   img_backbone:
-    name: resnet50
-    pretrained: True #https://download.mindspore.cn/toolkits/mindcv/mobilenet/mobilenetv3/mobilenet_v3_large_050_no_scale_se_v2_expand-3c4047ac.ckpt
+    type: ResNet
+    depth: 50
   img_neck:
     type: FPN
     in_channels: [2048]
