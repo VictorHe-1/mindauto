@@ -1,5 +1,3 @@
-from . import builder
-from .builder import *
+from .builder import build_loss
 
-__all__ = []
-__all__.extend(builder.__all__)
+__all__ = ['build_loss']

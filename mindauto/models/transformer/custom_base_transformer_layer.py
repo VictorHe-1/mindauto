@@ -5,6 +5,7 @@ from mindspore import nn
 import mindspore as ms
 
 from common import ConfigDict, build_norm_layer
+from .base_transformer import BaseTransformerLayer
 
 
 class MyCustomBaseTransformerLayer(nn.Cell):
@@ -75,10 +76,10 @@ class MyCustomBaseTransformerLayer(nn.Cell):
 
         assert set(operation_order) & set(
             ['self_attn', 'norm', 'ffn', 'cross_attn']) == \
-            set(operation_order), f'The operation_order of' \
-            f' {self.__class__.__name__} should ' \
-            f'contains all four operation type ' \
-            f"{['self_attn', 'norm', 'ffn', 'cross_attn']}"
+               set(operation_order), f'The operation_order of' \
+                                     f' {self.__class__.__name__} should ' \
+                                     f'contains all four operation type ' \
+                                     f"{['self_attn', 'norm', 'ffn', 'cross_attn']}"
 
         num_attn = operation_order.count('self_attn') + operation_order.count(
             'cross_attn')
@@ -86,9 +87,9 @@ class MyCustomBaseTransformerLayer(nn.Cell):
             attn_cfgs = [copy.deepcopy(attn_cfgs) for _ in range(num_attn)]
         else:
             assert num_attn == len(attn_cfgs), f'The length ' \
-                f'of attn_cfg {num_attn} is ' \
-                f'not consistent with the number of attention' \
-                f'in operation_order {operation_order}.'
+                                               f'of attn_cfg {num_attn} is ' \
+                                               f'not consistent with the number of attention' \
+                                               f'in operation_order {operation_order}.'
 
         self.num_attn = num_attn
         self.operation_order = operation_order
@@ -131,18 +132,20 @@ class MyCustomBaseTransformerLayer(nn.Cell):
         self.norms = nn.CellList()
         num_norms = operation_order.count('norm')
         for _ in range(num_norms):
-            self.norms.append(build_norm_layer(norm_cfg, self.embed_dims)[1])
+            norm_cfg['epsilon'] = 1e-05
+            norm_cfg['normalized_shape'] = (self.embed_dims,)
+            self.norms.append(build_norm_layer(norm_cfg))
 
     def construct(self,
-                query,
-                key=None,
-                value=None,
-                query_pos=None,
-                key_pos=None,
-                attn_masks=None,
-                query_key_padding_mask=None,
-                key_padding_mask=None,
-                **kwargs):
+                  query,
+                  key=None,
+                  value=None,
+                  query_pos=None,
+                  key_pos=None,
+                  attn_masks=None,
+                  query_key_padding_mask=None,
+                  key_padding_mask=None,
+                  **kwargs):
         """Forward function for `TransformerDecoderLayer`.
         **kwargs contains some specific arguments of attentions.
         Args:
@@ -185,9 +188,9 @@ class MyCustomBaseTransformerLayer(nn.Cell):
                           f'{self.__class__.__name__} ')
         else:
             assert len(attn_masks) == self.num_attn, f'The length of ' \
-                f'attn_masks {len(attn_masks)} must be equal ' \
-                f'to the number of attention in ' \
-                f'operation_order {self.num_attn}'
+                                                     f'attn_masks {len(attn_masks)} must be equal ' \
+                                                     f'to the number of attention in ' \
+                                                     f'operation_order {self.num_attn}'
 
         for layer in self.operation_order:
             if layer == 'self_attn':
@@ -229,3 +232,48 @@ class MyCustomBaseTransformerLayer(nn.Cell):
                 ffn_index += 1
 
         return query
+
+
+class DetrTransformerDecoderLayer(BaseTransformerLayer):
+    """Implements decoder layer in DETR transformer.
+
+    Args:
+        attn_cfgs (list[`mmcv.ConfigDict`] | list[dict] | dict )):
+            Configs for self_attention or cross_attention, the order
+            should be consistent with it in `operation_order`. If it is
+            a dict, it would be expand to the number of attention in
+            `operation_order`.
+        feedforward_channels (int): The hidden dimension for FFNs.
+        ffn_dropout (float): Probability of an element to be zeroed
+            in ffn. Default 0.0.
+        operation_order (tuple[str]): The execution order of operation
+            in transformer. Such as ('self_attn', 'norm', 'ffn', 'norm').
+            Default：None
+        act_cfg (dict): The activation config for FFNs. Default: `LN`
+        norm_cfg (dict): Config dict for normalization layer.
+            Default: `LN`.
+        ffn_num_fcs (int): The number of fully-connected layers in FFNs.
+            Default：2.
+    """
+
+    def __init__(self,
+                 attn_cfgs,
+                 feedforward_channels,
+                 ffn_dropout=0.0,
+                 operation_order=None,
+                 act_cfg=dict(type='ReLU'),
+                 norm_cfg=dict(type='LN'),
+                 ffn_num_fcs=2,
+                 **kwargs):
+        super(DetrTransformerDecoderLayer, self).__init__(
+            attn_cfgs=attn_cfgs,
+            feedforward_channels=feedforward_channels,
+            ffn_dropout=ffn_dropout,
+            operation_order=operation_order,
+            act_cfg=act_cfg,
+            norm_cfg=norm_cfg,
+            ffn_num_fcs=ffn_num_fcs,
+            **kwargs)
+        assert len(operation_order) == 6
+        assert set(operation_order) == set(
+            ['self_attn', 'norm', 'cross_attn', 'ffn'])

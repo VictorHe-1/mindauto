@@ -55,11 +55,9 @@ class BEVFormerHead(DETRHead):
             self.code_size = kwargs['code_size']
         else:
             self.code_size = 10
-        if code_weights is not None:
-            self.code_weights = code_weights
-        else:
-            self.code_weights = [1.0, 1.0, 1.0,
-                                 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]
+        if code_weights is None:
+            code_weights = [1.0, 1.0, 1.0,
+                            1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.pc_range = self.bbox_coder.pc_range
@@ -68,15 +66,15 @@ class BEVFormerHead(DETRHead):
         self.num_cls_fcs = num_cls_fcs - 1
         super(BEVFormerHead, self).__init__(
             *args, transformer=transformer, **kwargs)
-        self.code_weights = ms.Parameter(ms.Tensor(
-            self.code_weights), requires_grad=False)
+        self.code_weights = ms.Parameter(
+            code_weights, requires_grad=False, name='code_weights')
 
     def _init_layers(self):
         """Initialize classification branch and regression branch of head."""
         cls_branch = []
         for _ in range(self.num_reg_fcs):
             cls_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
-            cls_branch.append(nn.LayerNorm(self.embed_dims))
+            cls_branch.append(nn.LayerNorm(normalized_shape=(self.embed_dims,), epsilon=1e-05))
             cls_branch.append(nn.ReLU())
         cls_branch.append(nn.Dense(self.embed_dims, self.cls_out_channels))
         fc_cls = nn.SequentialCell(*cls_branch)

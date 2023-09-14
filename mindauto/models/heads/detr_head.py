@@ -183,7 +183,7 @@ class DETRHead(AnchorFreeHead):
             self.assigner = build_assigner(assigner)
             # DETR sampling=False, so use PseudoSampler
             sampler_cfg = dict(type='PseudoSampler')
-            self.sampler = build_sampler(sampler_cfg, context=self)
+            self.sampler = build_sampler(sampler_cfg)
         self.num_query = num_query
         self.num_classes = num_classes
         self.in_channels = in_channels
@@ -200,7 +200,7 @@ class DETRHead(AnchorFreeHead):
         else:
             self.cls_out_channels = num_classes + 1
         self.act_cfg = transformer.get('act_cfg',
-                                       dict(type='ReLU', inplace=True))
+                                       dict(type='ReLU'))
         self.activate = build_activation_layer(self.act_cfg)
         self.positional_encoding = build_positional_encoding(
             positional_encoding)

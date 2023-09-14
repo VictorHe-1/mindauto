@@ -176,7 +176,7 @@ class CustomMSDeformableAttention(nn.Cell):
         grid_init = (grid_init /
                      grid_init.abs().max(-1, keepdims=True)[0]).view(
             self.num_heads, 1, 1,
-            2).tile((1, self.num_levels * self.num_bev_queue, self.num_points, 1))
+            2).tile((1, self.num_levels, self.num_points, 1))
 
         for i in range(self.num_points):
             grid_init[:, :, i, :] *= i + 1

@@ -1,13 +1,14 @@
-from .decoder import DetectionTransformerDecoder
+from .decoder import DetectionTransformerDecoder, CustomMSDeformableAttention
 from .encoder import BEVFormerEncoder, BEVFormerLayer
-from .custom_base_transformer_layer import MyCustomBaseTransformerLayer
+from .custom_base_transformer_layer import MyCustomBaseTransformerLayer, DetrTransformerDecoderLayer
 from .temporal_self_attention import TemporalSelfAttention
-from .spatial_cross_attention import MSDeformableAttention3D
-from .transformer import FFN, PerceptionTransformer
+from .spatial_cross_attention import MSDeformableAttention3D, SpatialCrossAttention
+from .transformer import FFN, PerceptionTransformer, MultiheadAttention
 
 transformer_layers = {
     'BEVFormerLayer': BEVFormerLayer,
-    'MyCustomBaseTransformerLayer': MyCustomBaseTransformerLayer
+    'MyCustomBaseTransformerLayer': MyCustomBaseTransformerLayer,
+    'DetrTransformerDecoderLayer': DetrTransformerDecoderLayer
 }
 transformer_layers_sequence = {
     'DetectionTransformerDecoder': DetectionTransformerDecoder,
@@ -15,7 +16,10 @@ transformer_layers_sequence = {
 }
 attention_layers = {
     'TemporalSelfAttention': TemporalSelfAttention,
-    'MSDeformableAttention3D': MSDeformableAttention3D
+    'MSDeformableAttention3D': MSDeformableAttention3D,
+    'SpatialCrossAttention': SpatialCrossAttention,
+    'MultiheadAttention': MultiheadAttention,
+    'CustomMSDeformableAttention': CustomMSDeformableAttention
 }
 feedforward_layers = {
     'FFN': FFN

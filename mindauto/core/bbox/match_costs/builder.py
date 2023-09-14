@@ -7,7 +7,7 @@ match_cost_type = {
 
 def build_match_cost(cfg, default_args=None):
     """Builder of IoU calculator."""
-    obj_cls = match_cost_type.get(cfg[type])
+    obj_cls = match_cost_type.get(cfg['type'])
     args = cfg.copy()
     args.pop('type')
     return obj_cls(**args)
