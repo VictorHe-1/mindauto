@@ -18,7 +18,7 @@ class ConvModule(nn.Cell):
                  act_cfg=dict(type='ReLU'),
                  inplace=True,
                  with_spectral_norm=False,
-                 padding_mode='zeros',
+                 padding_mode='pad',
                  order=('conv', 'norm', 'act')):
         super(ConvModule, self).__init__()
         assert conv_cfg is None or isinstance(conv_cfg, dict)
@@ -49,7 +49,7 @@ class ConvModule(nn.Cell):
         # reset padding to 0 for conv module
         conv_padding = 0 if self.with_explicit_padding else padding
         # build convolution layer
-        self.conv = nn.Conv2D(in_channels,
+        self.conv = nn.Conv2d(in_channels,
                                out_channels,
                                kernel_size,
                                stride=stride,
