@@ -79,6 +79,7 @@ class GridMask(nn.Cell):
         self.st_prob = prob
         self.prob = prob
         self.fp16_enable = False
+        self.l = None
 
     def set_prob(self, epoch, max_epoch):
         self.prob = self.st_prob * epoch / max_epoch  # + 1.#0.5
