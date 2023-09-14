@@ -1,4 +1,5 @@
 import io
+from io import BytesIO, StringIO
 import json
 import yaml
 import numbers
@@ -11,6 +12,7 @@ from cv2 import (IMREAD_COLOR, IMREAD_GRAYSCALE, IMREAD_IGNORE_ORIENTATION,
 import os
 from os import path as osp
 from pathlib import Path
+from .handlers import JsonHandler, YamlHandler, PickleHandler
 
 try:
     from turbojpeg import TJCS_RGB, TJPF_BGR, TJPF_GRAY, TurboJPEG
@@ -42,6 +44,14 @@ pillow_interp_codes = {
     'box': Image.BOX,
     'lanczos': Image.LANCZOS,
     'hamming': Image.HAMMING
+}
+
+file_handlers = {
+    'json': JsonHandler(),
+    'yaml': YamlHandler(),
+    'yml': YamlHandler(),
+    'pickle': PickleHandler(),
+    'pkl': PickleHandler()
 }
 
 imread_backend = 'cv2'
@@ -172,11 +182,15 @@ def load_from_serialized(file, file_format=None, **kwargs):
     return obj
 
 
-def dump(obj, file=None, file_format=None, **kwargs):
+def dump(obj, file=None, file_format=None, file_client_args=None, **kwargs):
     """Dump data to json/yaml/pickle strings or files.
 
     This method provides a unified api for dumping data as strings or to files,
     and also supports custom arguments for each file format.
+
+    Note:
+        In v1.3.16 and later, ``dump`` supports dumping data as strings or to
+        files which is saved to different backends.
 
     Args:
         obj (any): The python object to be dumped.
@@ -184,48 +198,46 @@ def dump(obj, file=None, file_format=None, **kwargs):
             specified, then the object is dumped to a str, otherwise to a file
             specified by the filename or file-like object.
         file_format (str, optional): Same as :func:`load`.
+        file_client_args (dict, optional): Arguments to instantiate a
+            FileClient. See :class:`mmcv.fileio.FileClient` for details.
+            Default: None.
+
+    Examples:
+        >>> dump('hello world', '/path/of/your/file')  # disk
+        >>> dump('hello world', 's3://path/of/your/file')  # ceph or petrel
 
     Returns:
         bool: True for success, False otherwise.
     """
+    from .file_client import FileClient
     if isinstance(file, Path):
         file = str(file)
     if file_format is None:
-        if isinstance(file, str):
+        if is_str(file):
             file_format = file.split('.')[-1]
         elif file is None:
-            raise ValueError('file_format must be specified since file is None')
-    if file_format not in ['json', 'yaml', 'yml', 'pickle', 'pkl']:
+            raise ValueError(
+                'file_format must be specified since file is None')
+    if file_format not in file_handlers:
         raise TypeError(f'Unsupported format: {file_format}')
 
+    handler = file_handlers[file_format]
     if file is None:
-        if file_format in ['json']:
-            return json.dumps(obj, **kwargs)
-        elif file_format in ['yaml', 'yml']:
-            return yaml.dump(obj, **kwargs)
-        elif file_format in ['pickle', 'pkl']:
-            return pickle.dumps(obj, **kwargs)
-    elif isinstance(file, str):
-        if file_format in ['json']:
-            with open(file, 'w') as f:
-                json.dump(obj, f, **kwargs)
-        elif file_format in ['yaml', 'yml']:
-            with open(file, 'w') as f:
-                yaml.dump(obj, f, **kwargs)
-        elif file_format in ['pickle', 'pkl']:
-            with open(file, 'wb') as f:
-                pickle.dump(obj, f, **kwargs)
+        return handler.dump_to_str(obj, **kwargs)
+    elif is_str(file):
+        file_client = FileClient.infer_client(file_client_args, file)
+        if handler.str_like:
+            with StringIO() as f:
+                handler.dump_to_fileobj(obj, f, **kwargs)
+                file_client.put_text(f.getvalue(), file)
+        else:
+            with BytesIO() as f:
+                handler.dump_to_fileobj(obj, f, **kwargs)
+                file_client.put(f.getvalue(), file)
     elif hasattr(file, 'write'):
-        if file_format in ['json']:
-            json.dump(obj, file, **kwargs)
-        elif file_format in ['yaml', 'yml']:
-            yaml.dump(obj, file, **kwargs)
-        elif file_format in ['pickle', 'pkl']:
-            pickle.dump(obj, file, **kwargs)
+        handler.dump_to_fileobj(obj, file, **kwargs)
     else:
         raise TypeError('"file" must be a filename str or a file-object')
-
-    return True
 
 
 def _scale_size(size, scale):
