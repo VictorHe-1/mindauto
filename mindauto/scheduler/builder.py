@@ -19,6 +19,12 @@ def create_scheduler(
     warmup_ratio: float = 0.33,
     num_epochs: int = 200,
 ):
+    if isinstance(lr, str):
+        lr = eval(lr)
+    if isinstance(min_lr_ratio, str):
+        min_lr_ratio = eval(min_lr_ratio)
+    if isinstance(warmup_ratio, str):
+        warmup_ratio = eval(warmup_ratio)
     if scheduler == "CosineAnnealing":
         main_lr_scheduler = cosine_annealing_lr(
             lr=lr,
