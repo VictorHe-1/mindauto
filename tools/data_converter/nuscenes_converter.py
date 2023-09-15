@@ -16,22 +16,6 @@ from collections import OrderedDict
 import common
 # from mindauto.core.bbox.structures.utils import points_cam2img
 
-class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types """
-    def default(self, obj):
-        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
-                            np.int16, np.int32, np.int64, np.uint8,
-                            np.uint16, np.uint32, np.uint64)):
-            return int(obj)
-        elif isinstance(obj, (np.float_, np.float16, np.float32,
-                              np.float64)):
-            return float(obj)
-        elif isinstance(obj, (np.ndarray,)):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
-
-
-
 
 nus_categories = ('car', 'truck', 'trailer', 'bus', 'construction_vehicle',
                   'bicycle', 'motorcycle', 'pedestrian', 'traffic_cone',
@@ -448,21 +432,6 @@ def export_2d_annotation(root_path, info_path, version, mono3d=True):
     else:
         json_prefix = f'{info_path[:-4]}'
     common.dump(coco_2d_dict, f'{json_prefix}.coco.json')
-    # if you don't use common this library,you can use the following code instead
-    # json_file_path = f'{json_prefix}.coco.json'
-    # dumped = json.dumps(coco_2d_dict, cls=NumpyEncoder)
-    # with open(json_file_path, 'a') as f:
-    #     f.write(dumped + '\n')
-
-
-
-
-
-
-
-
-
-
 
 
 def get_2d_boxes(nusc,
