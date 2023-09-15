@@ -5,8 +5,10 @@ from mindspore import ops
 from mindauto.core.points import BasePoints
 from .base_box3d import BaseInstance3DBoxes
 from .utils import limit_period, rotation_3d_in_axis
+from mindspore import ms_class
 
 
+@ms_class
 class LiDARInstance3DBoxes(BaseInstance3DBoxes):
     """3D boxes of instances in LIDAR coordinates.
 
@@ -40,7 +42,10 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
     def gravity_center(self):
         """ms.Tensor: A tensor with center of each box."""
         bottom_center = self.bottom_center
-        gravity_center = ops.zeros_like(bottom_center)
+        if self.numpy_boxes:
+            gravity_center = np.zeros_like(bottom_center)
+        else:
+            gravity_center = ops.zeros_like(bottom_center)
         gravity_center[:, :2] = bottom_center[:, :2]
         gravity_center[:, 2] = bottom_center[:, 2] + self.tensor[:, 5] * 0.5
         return gravity_center
@@ -72,17 +77,28 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
         #  empty tensor currently.
         assert len(self.tensor) != 0
         dims = self.dims
-        corners_norm = ms.Tensor(
-            np.stack(np.unravel_index(np.arange(8), [2] * 3), axis=1), dtype=dims.dtype)
+        if self.numpy_boxes:
+            corners_norm = np.stack(np.unravel_index(np.arange(8), [2] * 3), axis=1)
+            corners_norm = corners_norm[[0, 1, 3, 2, 4, 5, 7, 6]]
+            # use relative origin [0.5, 0.5, 0]
+            corners_norm = corners_norm - np.array([0.5, 0.5, 0], dtype=dims.dtype)
+            corners = dims.reshape([-1, 1, 3]) * corners_norm.reshape([1, 8, 3])
 
-        corners_norm = corners_norm[[0, 1, 3, 2, 4, 5, 7, 6]]
-        # use relative origin [0.5, 0.5, 0]
-        corners_norm = corners_norm - ms.Tensor([0.5, 0.5, 0], dtype=dims.dtype)
-        corners = dims.view([-1, 1, 3]) * corners_norm.reshape([1, 8, 3])
+            # rotate around z axis
+            corners = rotation_3d_in_axis(corners, self.tensor[:, 6], axis=2)
+            corners += self.tensor[:, :3].reshape(-1, 1, 3)
+        else:
+            corners_norm = ms.Tensor(
+                np.stack(np.unravel_index(np.arange(8), [2] * 3), axis=1), dtype=dims.dtype)
 
-        # rotate around z axis
-        corners = rotation_3d_in_axis(corners, self.tensor[:, 6], axis=2)
-        corners += self.tensor[:, :3].view(-1, 1, 3)
+            corners_norm = corners_norm[[0, 1, 3, 2, 4, 5, 7, 6]]
+            # use relative origin [0.5, 0.5, 0]
+            corners_norm = corners_norm - ms.Tensor([0.5, 0.5, 0], dtype=dims.dtype)
+            corners = dims.view([-1, 1, 3]) * corners_norm.reshape([1, 8, 3])
+
+            # rotate around z axis
+            corners = rotation_3d_in_axis(corners, self.tensor[:, 6], axis=2)
+            corners += self.tensor[:, :3].view(-1, 1, 3)
         return corners
 
     @property
@@ -99,20 +115,71 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
         bev_rotated_boxes = self.bev
         # convert the rotation to a valid range
         rotations = bev_rotated_boxes[:, -1]
-        normed_rotations = ops.abs(limit_period(rotations, 0.5, np.pi))
+        if self.numpy_boxes:
+            normed_rotations = np.abs(limit_period(rotations, 0.5, np.pi, self.numpy_boxes))
 
-        # find the center of boxes
-        conditions = (normed_rotations > np.pi / 4)[..., None]
-        bboxes_xywh = ops.where(conditions, bev_rotated_boxes[:,
-                                                                [0, 1, 3, 2]],
-                                  bev_rotated_boxes[:, :4])
+            # find the center of boxes
+            conditions = (normed_rotations > np.pi / 4)[..., None]
+            bboxes_xywh = np.where(conditions, bev_rotated_boxes[:,
+                                                [0, 1, 3, 2]],
+                                    bev_rotated_boxes[:, :4])
 
-        centers = bboxes_xywh[:, :2]
-        dims = bboxes_xywh[:, 2:]
-        bev_boxes = ops.cat([centers - dims / 2, centers + dims / 2], axis=-1)
+            centers = bboxes_xywh[:, :2]
+            dims = bboxes_xywh[:, 2:]
+            bev_boxes = np.concatenate([centers - dims / 2, centers + dims / 2], axis=-1)
+        else:
+            normed_rotations = ops.abs(limit_period(rotations, 0.5, np.pi, self.numpy_boxes))
+
+            # find the center of boxes
+            conditions = (normed_rotations > np.pi / 4)[..., None]
+            bboxes_xywh = ops.where(conditions, bev_rotated_boxes[:,
+                                                                    [0, 1, 3, 2]],
+                                      bev_rotated_boxes[:, :4])
+
+            centers = bboxes_xywh[:, :2]
+            dims = bboxes_xywh[:, 2:]
+            bev_boxes = ops.cat([centers - dims / 2, centers + dims / 2], axis=-1)
         return bev_boxes
 
     def rotate(self, angle, points=None):
+        if self.numpy_boxes:
+            if not isinstance(angle, np.ndarray):
+                angle = np.array(angle, dtype=self.tensor.dtype)
+            assert angle.shape == (3, 3) or angle.size == 1, \
+                f'invalid rotation angle shape {angle.shape}'
+
+            if angle.size == 1:
+                rot_sin = np.sin(angle)
+                rot_cos = np.cos(angle)
+                rot_mat_T = np.array([[rot_cos, -rot_sin, 0],
+                                      [rot_sin, rot_cos, 0],
+                                      [0, 0, 1]], dtype=self.tensor.dtype)
+            else:
+                rot_mat_T = angle
+                rot_sin = rot_mat_T[1, 0]
+                rot_cos = rot_mat_T[0, 0]
+                angle = np.arctan2(rot_sin, rot_cos)
+
+            self.tensor[:, :3] = np.matmul(self.tensor[:, :3], rot_mat_T)
+            self.tensor[:, 6] += angle
+
+            if self.tensor.shape[1] == 9:
+                # rotate velo vector
+                self.tensor[:, 7:9] = np.matmul(self.tensor[:, 7:9], rot_mat_T[:2, :2])
+
+            if points is not None:
+                if isinstance(points, np.ndarray):
+                    points[:, :3] = np.matmul(points[:, :3], rot_mat_T)
+                elif isinstance(points, BasePoints):
+                    # clockwise
+                    points.rotate(-angle)
+                else:
+                    raise ValueError
+                return points, rot_mat_T
+        else:
+            self.rotate_ms(angle, points)
+
+    def rotate_ms(self, angle, points=None):
         """Rotate boxes with points (optional) with the given angle or \
         rotation matrix.
 
@@ -213,12 +280,20 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
         Returns:
             ms.Tensor: Whether each box is inside the reference range.
         """
-        numpy_tensor = self.tensor.asnumpy()
-        in_range_flags = ((numpy_tensor[:, 0] > box_range[0])
-                          & (numpy_tensor[:, 1] > box_range[1])
-                          & (numpy_tensor[:, 0] < box_range[2])
-                          & (numpy_tensor[:, 1] < box_range[3]))
-        return ms.Tensor(in_range_flags)
+        if not self.numpy_boxes:
+            numpy_tensor = self.tensor.asnumpy()
+            in_range_flags = ((numpy_tensor[:, 0] > box_range[0])
+                              & (numpy_tensor[:, 1] > box_range[1])
+                              & (numpy_tensor[:, 0] < box_range[2])
+                              & (numpy_tensor[:, 1] < box_range[3]))
+            return ms.Tensor(in_range_flags)
+        else:
+            in_range_flags = ((self.tensor[:, 0] > box_range[0])
+                              & (self.tensor[:, 1] > box_range[1])
+                              & (self.tensor[:, 0] < box_range[2])
+                              & (self.tensor[:, 1] < box_range[3]))
+            return in_range_flags
+
 
     def convert_to(self, dst, rt_mat=None):
         """Convert self to ``dst`` mode.

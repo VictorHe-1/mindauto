@@ -1,6 +1,5 @@
 import copy
 from os import path as osp
-from mindspore import ops
 import numpy as np
 import random
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
@@ -43,7 +42,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                 return None
             self.pre_pipeline(input_dict)
             example = run_transforms(input_dict, transforms=self.transforms)
-            gt_labels_3d = example['gt_labels_3d'].asnumpy()
+            gt_labels_3d = example['gt_labels_3d']
             if self.filter_empty_gt and \
                     (example is None or ~(gt_labels_3d != -1).any()):
                 return None
@@ -73,7 +72,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                 metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
-        queue[-1]['img'] = ops.stack(imgs_list)
+        queue[-1]['img'] = np.stack(imgs_list)
         queue[-1]['img_metas'] = metas_map
         queue = queue[-1]
         return queue
@@ -165,6 +164,16 @@ class CustomNuScenesDataset(NuScenesDataset):
     def convert_data_to_numpy(self, data):
         # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
         ordered_key = ['gt_labels_3d', 'img']
+
+        # convert gt_bboxes_3d (LiDARInstance3D) to numpy array
+        gt_bbox_3d = data['gt_bboxes_3d']
+        data['tensor'] = gt_bbox_3d.input_tensor
+        data['box_dim'] = np.array(gt_bbox_3d.input_box_dim)
+        data['with_yaw'] = np.array(gt_bbox_3d.with_yaw)
+        data['origin'] = np.array(gt_bbox_3d.input_origin)
+        ordered_key.extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
+        data.pop('gt_bboxes_3d')
+
         queue_length = 0
         for key, value in data['img_metas'].items():
             for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
@@ -180,22 +189,10 @@ class CustomNuScenesDataset(NuScenesDataset):
             queue_length += 1
         data.pop('img_metas')
 
-        # convert gt_bboxes_3d (LiDARInstance3D) to numpy array
-        gt_bbox_3d = data['gt_bboxes_3d']
-        data['tensor'] = gt_bbox_3d.input_tensor.asnumpy()
-        data['box_dim'] = np.array(gt_bbox_3d.input_box_dim)
-        data['with_yaw'] = np.array(gt_bbox_3d.with_yaw)
-        data['origin'] = np.array(gt_bbox_3d.input_origin)
-        ordered_key.extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
-        data.pop('gt_bboxes_3d')
-
-        if 'gt_labels_3d' in data:
-            data['gt_labels_3d'] = data['gt_labels_3d'].asnumpy()
-        data['img'] = data['img'].asnumpy()
-
         numpy_data = []
         for key in ordered_key:
             numpy_data.append(data[key])
+        numpy_data.append(np.array(ordered_key))
         return tuple(numpy_data)
 
 

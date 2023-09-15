@@ -25,7 +25,7 @@ def get_box_type(box_type):
     return box_type_3d, box_mode_3d
 
 
-def limit_period(val, offset=0.5, period=np.pi):
+def limit_period(val, offset=0.5, period=np.pi, numpy_boxes=False):
     """Limit the value into a period for periodic function.
 
     Args:
@@ -38,6 +38,8 @@ def limit_period(val, offset=0.5, period=np.pi):
         ms.Tensor: Value in the range of \
             [-offset * period, (1-offset) * period]
     """
+    if numpy_boxes:
+        return val - np.floor(val / period + offset) * period
     return val - ops.floor(val / period + offset) * period
 
 

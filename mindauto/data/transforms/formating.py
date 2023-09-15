@@ -1,5 +1,4 @@
 import numpy as np
-import mindspore as ms
 from mindauto.core.bbox.structures import BaseInstance3DBoxes
 from mindauto.core.points import BasePoints
 
@@ -39,10 +38,10 @@ class DefaultFormatBundle(object):
                 # process multiple imgs in single frame
                 imgs = [img.transpose(2, 0, 1) for img in results['img']]
                 imgs = np.ascontiguousarray(np.stack(imgs, axis=0))
-                results['img'] = ms.Tensor(imgs)  # DC(to_tensor(img), stack=True)
+                results['img'] = imgs  # DC(to_tensor(img), stack=True)
             else:
                 img = np.ascontiguousarray(results['img'].transpose(2, 0, 1))
-                results['img'] = ms.Tensor(img)  # DC(to_tensor(img), stack=True)
+                results['img'] = img  # DC(to_tensor(img), stack=True)
         for key in [
             'proposals', 'gt_bboxes', 'gt_bboxes_ignore', 'gt_labels',
             'gt_labels_3d', 'attr_labels', 'pts_instance_mask',
@@ -51,15 +50,15 @@ class DefaultFormatBundle(object):
             if key not in results:
                 continue
             if isinstance(results[key], list):
-                results[key] = [ms.Tensor(res) for res in results[key]]
+                results[key] = [res for res in results[key]]
             else:
-                results[key] = ms.Tensor(results[key])
+                results[key] = np.array(results[key])
         if 'gt_bboxes_3d' in results:
             if not isinstance(results['gt_bboxes_3d'], BaseInstance3DBoxes):
-                results['gt_bboxes_3d'] = ms.Tensor(results['gt_bboxes_3d'])
+                results['gt_bboxes_3d'] = np.array(results['gt_bboxes_3d'])
 
         if 'gt_semantic_seg' in results:
-            results['gt_semantic_seg'] = ms.Tensor(results['gt_semantic_seg'][None, ...])
+            results['gt_semantic_seg'] = np.array(results['gt_semantic_seg'][None, ...])
 
         return results
 
@@ -102,13 +101,13 @@ class DefaultFormatBundle3D(DefaultFormatBundle):
         if 'points' in results:
             assert isinstance(results['points'], BasePoints)
             # results['points'] = DC(results['points'].tensor)
-            results['points'] = ms.Tensor(results['points'].tensor)
+            results['points'] = results['points'].tensor
 
         for key in ['voxels', 'coors', 'voxel_centers', 'num_points']:
             if key not in results:
                 continue
             # results[key] = DC(to_tensor(results[key]), stack=False)
-            results[key] = ms.Tensor(results[key])
+            results[key] = np.array(results[key])
 
         if self.with_gt:
             # Clean GT bboxes in the final

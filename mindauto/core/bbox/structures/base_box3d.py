@@ -34,7 +34,40 @@ class BaseInstance3DBoxes(object):
             boxes.
     """
 
-    def __init__(self, tensor, box_dim=7, with_yaw=True, origin=(0.5, 0.5, 0)):
+    def __init__(self, tensor, box_dim=7, with_yaw=True, origin=(0.5, 0.5, 0), numpy_boxes=False):
+        self.numpy_boxes = numpy_boxes
+        if self.numpy_boxes:
+            self.numpy_init(tensor, box_dim, with_yaw, origin)
+        else:
+            self.ms_init(tensor, box_dim, with_yaw, origin)
+
+    def numpy_init(self, tensor, box_dim, with_yaw, origin):
+        self.input_tensor = np.copy(tensor)
+        self.input_box_dim = box_dim
+        self.input_with_yaw = with_yaw
+        self.input_origin = origin
+        tensor = np.array(tensor, dtype=np.float32)
+        if np.size(tensor) == 0:
+            tensor = tensor.reshape((0, box_dim)).astype(np.float32)
+        assert tensor.ndim == 2 and tensor.shape[-1] == box_dim, tensor.shape
+
+        if tensor.shape[-1] == 6:
+            assert box_dim == 6
+            fake_rot = np.zeros((tensor.shape[0], 1), dtype=tensor.dtype)
+            tensor = np.concatenate((tensor, fake_rot), axis=-1)
+            self.box_dim = box_dim + 1
+            self.with_yaw = False
+        else:
+            self.box_dim = box_dim
+            self.with_yaw = with_yaw
+        self.tensor = np.copy(tensor)
+
+        if origin != (0.5, 0.5, 0):
+            dst = np.array((0.5, 0.5, 0), dtype=self.tensor.dtype)
+            src = np.array(origin, dtype=self.tensor.dtype)
+            self.tensor[:, :3] += self.tensor[:, 3:6] * (dst - src)
+
+    def ms_init(self, tensor, box_dim, with_yaw, origin):
         self.input_tensor = tensor.copy()
         self.input_box_dim = box_dim
         self.input_with_yaw = with_yaw
@@ -152,8 +185,10 @@ class BaseInstance3DBoxes(object):
         Args:
             trans_vector (ms.Tensor): Translation vector of size 1x3.
         """
-        if not isinstance(trans_vector, ms.Tensor):
+        if not self.numpy_boxes and not isinstance(trans_vector, ms.Tensor):
             trans_vector = ms.Tensor(trans_vector, dtype=self.tensor.dtype)
+        if self.numpy_boxes and not isinstance(trans_vector, np.ndarray):
+            trans_vector = np.array(trans_vector, dtype=self.tensor.dtype)
         self.tensor[:, :3] += trans_vector
 
     def in_range_3d(self, box_range):
@@ -228,7 +263,7 @@ class BaseInstance3DBoxes(object):
             offset (float): The offset of the yaw.
             period (float): The expected period.
         """
-        self.tensor[:, 6] = limit_period(self.tensor[:, 6], offset, period)
+        self.tensor[:, 6] = limit_period(self.tensor[:, 6], offset, period, self.numpy_boxes)
 
     def nonempty(self, threshold: float = 0.0):
         """Find boxes that are non-empty.
@@ -272,11 +307,12 @@ class BaseInstance3DBoxes(object):
             return original_type(
                 self.tensor[item].reshape(1, -1),
                 box_dim=self.box_dim,
-                with_yaw=self.with_yaw)
+                with_yaw=self.with_yaw,
+                numpy_boxes=self.numpy_boxes)
         b = self.tensor[item]
         assert b.ndim == 2, \
             f'Indexing on Boxes with {item} failed to return a matrix!'
-        return original_type(b, box_dim=self.box_dim, with_yaw=self.with_yaw)
+        return original_type(b, box_dim=self.box_dim, with_yaw=self.with_yaw, numpy_boxes=self.numpy_boxes)
 
     def __len__(self):
         """int: Number of boxes in the current object."""
@@ -287,7 +323,7 @@ class BaseInstance3DBoxes(object):
         return self.__class__.__name__ + '(\n    ' + str(self.tensor) + ')'
 
     @classmethod
-    def cat(cls, boxes_list):
+    def cat(cls, boxes_list, numpy_boxes):
         """Concatenate a list of Boxes into a single Boxes.
 
         Args:
@@ -297,16 +333,25 @@ class BaseInstance3DBoxes(object):
             :obj:`BaseInstance3DBoxes`: The concatenated Boxes.
         """
         assert isinstance(boxes_list, (list, tuple))
-        if len(boxes_list) == 0:
+        if len(boxes_list) == 0 and not numpy_boxes:
             return cls(ms.numpy.empty(0))
+        if len(boxes_list) == 0 and numpy_boxes:
+            return cls(np.empty((0, 0)))
         assert all(isinstance(box, cls) for box in boxes_list)
 
         # use ms.cat (v.s. layers.cat)
         # so the returned boxes never share storage with input
-        cat_boxes = cls(
-            ops.cat([b.tensor for b in boxes_list], dim=0),
-            box_dim=boxes_list[0].tensor.shape[1],
-            with_yaw=boxes_list[0].with_yaw)
+        if numpy_boxes:
+            cat_boxes = cls(
+                np.concatenate([b.tensor for b in boxes_list], axis=0),
+                box_dim=boxes_list[0].tensor.shape[1],
+                with_yaw=boxes_list[0].with_yaw,
+                numpy_boxes=numpy_boxes)
+        else:
+            cat_boxes = cls(
+                ops.cat([b.tensor for b in boxes_list], dim=0),
+                box_dim=boxes_list[0].tensor.shape[1],
+                with_yaw=boxes_list[0].with_yaw)
         return cat_boxes
 
     def clone(self):
@@ -317,8 +362,12 @@ class BaseInstance3DBoxes(object):
                 as self.
         """
         original_type = type(self)
-        return original_type(
-            self.tensor.copy(), box_dim=self.box_dim, with_yaw=self.with_yaw)
+        if self.numpy_boxes:
+            return original_type(
+                np.copy(self.tensor), box_dim=self.box_dim, with_yaw=self.with_yaw, numpy_boxes=self.numpy_boxes)
+        else:
+            return original_type(
+                self.tensor.copy(), box_dim=self.box_dim, with_yaw=self.with_yaw)
 
     def __iter__(self):
         """Yield a box as a Tensor of shape (4,) at a time.
@@ -348,16 +397,25 @@ class BaseInstance3DBoxes(object):
         assert isinstance(boxes2, BaseInstance3DBoxes)
         assert type(boxes1) == type(boxes2), '"boxes1" and "boxes2" should' \
                                              f'be in the same type, got {type(boxes1)} and {type(boxes2)}.'
+        if boxes1.numpy_boxes and boxes2.numpy_boxes:
+            boxes1_top_height = boxes1.top_height.reshape(-1, 1)
+            boxes1_bottom_height = boxes1.bottom_height.reshape(-1, 1)
+            boxes2_top_height = boxes2.top_height.reshape(1, -1)
+            boxes2_bottom_height = boxes2.bottom_height.reshape(1, -1)
 
-        boxes1_top_height = boxes1.top_height.view(-1, 1)
-        boxes1_bottom_height = boxes1.bottom_height.view(-1, 1)
-        boxes2_top_height = boxes2.top_height.view(1, -1)
-        boxes2_bottom_height = boxes2.bottom_height.view(1, -1)
+            heighest_of_bottom = np.maximum(boxes1_bottom_height, boxes2_bottom_height)
+            lowest_of_top = np.minimum(boxes1_top_height, boxes2_top_height)
+            overlaps_h = np.clip(lowest_of_top - heighest_of_bottom, a_min=0, a_max=None)
+        else:
+            boxes1_top_height = boxes1.top_height.view(-1, 1)
+            boxes1_bottom_height = boxes1.bottom_height.view(-1, 1)
+            boxes2_top_height = boxes2.top_height.view(1, -1)
+            boxes2_bottom_height = boxes2.bottom_height.view(1, -1)
 
-        heighest_of_bottom = ops.max(boxes1_bottom_height,
-                                     boxes2_bottom_height)
-        lowest_of_top = ops.min(boxes1_top_height, boxes2_top_height)
-        overlaps_h = ops.clamp(lowest_of_top - heighest_of_bottom, min=0)
+            heighest_of_bottom = ops.max(boxes1_bottom_height,
+                                         boxes2_bottom_height)
+            lowest_of_top = ops.min(boxes1_top_height, boxes2_top_height)
+            overlaps_h = ops.clamp(lowest_of_top - heighest_of_bottom, min=0)
         return overlaps_h
 
     # @classmethod
@@ -432,8 +490,12 @@ class BaseInstance3DBoxes(object):
             :obj:`BaseInstance3DBoxes`: A new bbox object with ``data``, \
                 the object's other properties are similar to ``self``.
         """
-        new_tensor = ms.Tensor(data, dtype=self.tensor.dtype) \
-            if not isinstance(data, ms.Tensor) else data
+        if self.numpy_boxes:
+            new_tensor = np.array(data, dtype=self.tensor.dtype) \
+                if not isinstance(data, np.ndarray) else data
+        else:
+            new_tensor = ms.Tensor(data, dtype=self.tensor.dtype) \
+                if not isinstance(data, ms.Tensor) else data
         original_type = type(self)
         return original_type(
-            new_tensor, box_dim=self.box_dim, with_yaw=self.with_yaw)
+            new_tensor, box_dim=self.box_dim, with_yaw=self.with_yaw, numpy_boxes=self.numpy_boxes)

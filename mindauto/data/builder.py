@@ -142,6 +142,7 @@ def build_dataset(
         dataset_config.pop('train_queue_length')
 
     dataset_config['output_columns'].extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
+    dataset_config['output_columns'].append('ordered_key')
     dataset = dataset_class(**dataset_config)
 
     dataset_column_names = dataset.get_output_columns()
