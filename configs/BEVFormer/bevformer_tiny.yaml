@@ -1,11 +1,11 @@
 system:
-  mode: 0 # 0 for graph mode, 1 for pynative mode in MindSpore
+  mode: 1 # 0 for graph mode, 1 for pynative mode in MindSpore
   distribute: False
   amp_level: 'O0'
   seed: 42
   val_while_train: False
   drop_overflow_update: False
-  device_id: 0
+  device_id: 1
 
 dim: &dim 256
 pos_dim: &pos_dim 128
@@ -58,6 +58,14 @@ model:
   img_backbone:
     type: ResNet
     depth: 50
+    num_stages: 4
+    out_indices: (3, )
+    frozen_stages: 1
+    norm_cfg:
+      type: BN
+      requires_grad: False
+    norm_eval: True
+    style: pytorch
   img_neck:
     type: FPN
     in_channels: [2048]

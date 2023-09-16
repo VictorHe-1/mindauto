@@ -1,5 +1,10 @@
-from .resnet import resnet50
+from .resnet import ResNet
+
+backbone_types = {'ResNet': ResNet}
 
 
 def build_backbone(**kwargs):
-    return resnet50()
+    obj_cls = backbone_types.get(kwargs['type'])
+    args = kwargs.copy()
+    args.pop('type')
+    return obj_cls(**args)
