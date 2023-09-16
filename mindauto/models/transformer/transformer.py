@@ -266,12 +266,12 @@ class PerceptionTransformer(nn.Cell):
         bev_pos = ops.flatten(bev_pos, start_dim=2).permute(2, 0, 1)
 
         # obtain rotation angle and shift with ego motion
-        delta_x = np.array([each['can_bus'][0]
+        delta_x = np.array([each['can_bus'].asnumpy()[0]
                            for each in kwargs['img_metas']])
-        delta_y = np.array([each['can_bus'][1]
+        delta_y = np.array([each['can_bus'].asnumpy()[1]
                            for each in kwargs['img_metas']])
         ego_angle = np.array(
-            [each['can_bus'][-2] / np.pi * 180 for each in kwargs['img_metas']])
+            [each['can_bus'].asnumpy()[-2] / np.pi * 180 for each in kwargs['img_metas']])
         grid_length_y = grid_length[0]
         grid_length_x = grid_length[1]
         translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
@@ -302,7 +302,7 @@ class PerceptionTransformer(nn.Cell):
                     prev_bev[:, i] = tmp_prev_bev[:, 0]
 
         # add can bus signals
-        can_bus = ms.Tensor([each['can_bus'] for each in kwargs['img_metas']], dtype=bev_queries.dtype)
+        can_bus = ms.Tensor([each['can_bus'].asnumpy() for each in kwargs['img_metas']], dtype=bev_queries.dtype)
         can_bus = self.can_bus_mlp(can_bus)[None, :, :]
         bev_queries = bev_queries + can_bus * self.use_can_bus
 

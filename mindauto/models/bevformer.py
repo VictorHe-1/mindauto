@@ -12,7 +12,7 @@ from .detectors import MVXTwoStageDetector
 
 def split_array(array):
     split_list = np.split(array, array.shape[0])
-    split_list = [ms.Tensor(np.squeeze(item)) for item in split_list]
+    split_list = [np.squeeze(item) for item in split_list]
     return split_list
 
 

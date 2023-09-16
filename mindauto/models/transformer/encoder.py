@@ -10,7 +10,6 @@ from .base_transformer import TransformerLayerSequence
 
 
 class BEVFormerEncoder(TransformerLayerSequence):
-
     """
     Attention with both self and cross
     Implements the decoder in DETR transformer.
@@ -45,24 +44,25 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         # reference points in 3D space, used in spatial cross-attention (SCA)
         if dim == '3d':
-            zs = ops.linspace(0.5, Z - 0.5, num_points_in_pillar, dtype=dtype,
-                                ).view(-1, 1, 1).broadcast_to((num_points_in_pillar, H, W)) / Z
-            xs = ops.linspace(0.5, W - 0.5, W, dtype=dtype,
-                                ).view(1, 1, W).broadcast_to((num_points_in_pillar, H, W)) / W
-            ys = ops.linspace(0.5, H - 0.5, H, dtype=dtype,
-                                ).view(1, H, 1).broadcast_to((num_points_in_pillar, H, W)) / H
-            ref_3d = ops.stack((xs, ys, zs), -1)
-            ref_3d = ref_3d.permute(0, 3, 1, 2).flatten(start_dim=2).permute(0, 2, 1)
-            ref_3d = ref_3d[None].tile((bs, 1, 1, 1))
-            return ref_3d
+            zs = np.tile(np.linspace(0.5, Z - 0.5, num_points_in_pillar
+                                     ).reshape(-1, 1, 1), (1, H, W)) / Z
+            xs = np.tile(np.linspace(0.5, W - 0.5, W
+                                     ).reshape(1, 1, W), (num_points_in_pillar, H, 1)) / W
+            ys = np.tile(np.linspace(0.5, H - 0.5, H
+                                     ).reshape(1, H, 1), (num_points_in_pillar, 1, W)) / H
+            ref_3d = np.stack((xs, ys, zs), -1)
+            ref_3d = np.transpose(np.transpose(ref_3d, (0, 3, 1, 2)
+                                               ).reshape(ref_3d.shape[0], ref_3d.shape[3], -1), (0, 2, 1))
+            ref_3d = np.repeat(ref_3d[None], bs, axis=0)
+            return ms.Tensor(ref_3d, dtype=dtype)
 
         # reference points on 2D bev plane, used in temporal self-attention (TSA).
         elif dim == '2d':
             ref_y, ref_x = ops.meshgrid(
                 ops.linspace(
-                    0.5, H - 0.5, H, dtype=dtype),
+                    0.5, H - 0.5, H),
                 ops.linspace(
-                    0.5, W - 0.5, W, dtype=dtype),
+                    0.5, W - 0.5, W),
                 indexing='ij'
             )
             ref_y = ref_y.reshape(-1)[None] / H
@@ -72,24 +72,24 @@ class BEVFormerEncoder(TransformerLayerSequence):
             return ref_2d
 
     # This function must use torch fp32!
-    def point_sampling(self, reference_points, pc_range,  img_metas):
+    def point_sampling(self, reference_points, pc_range, img_metas):
         lidar2img = []
         for img_meta in img_metas:
             lidar2img.append(img_meta['lidar2img'])
         lidar2img = np.asarray(lidar2img)
         lidar2img = ms.Tensor(lidar2img, dtype=reference_points.dtype)  # (B, N, 4, 4)
-        reference_points = reference_points.copy()
+        reference_points = reference_points.asnumpy()  # modified
 
         reference_points[..., 0:1] = reference_points[..., 0:1] * \
-            (pc_range[3] - pc_range[0]) + pc_range[0]
+                                     (pc_range[3] - pc_range[0]) + pc_range[0]
         reference_points[..., 1:2] = reference_points[..., 1:2] * \
-            (pc_range[4] - pc_range[1]) + pc_range[1]
+                                     (pc_range[4] - pc_range[1]) + pc_range[1]
         reference_points[..., 2:3] = reference_points[..., 2:3] * \
-            (pc_range[5] - pc_range[2]) + pc_range[2]
+                                     (pc_range[5] - pc_range[2]) + pc_range[2]
 
         reference_points = ops.cat(
-            (reference_points, ops.ones_like(reference_points[..., :1])), -1)
-
+            (reference_points, ops.ones_like(ms.Tensor(reference_points[..., :1]))), -1)
+        reference_points = ms.Tensor(reference_points)
         reference_points = reference_points.permute(1, 0, 2, 3)
         D, B, num_query = reference_points.shape[:3]
         num_cam = lidar2img.shape[1]
@@ -101,7 +101,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
             1, B, num_cam, 1, 4, 4).tile((D, 1, 1, num_query, 1, 1))
 
         reference_points_cam = ops.matmul(lidar2img.astype(ms.float32),
-                                            reference_points.astype(ms.float32)).squeeze(-1)
+                                          reference_points.astype(ms.float32)).squeeze(-1)
         eps = 1e-5
 
         bev_mask = (reference_points_cam[..., 2:3] > eps)
@@ -124,19 +124,19 @@ class BEVFormerEncoder(TransformerLayerSequence):
         return reference_points_cam, bev_mask
 
     def construct(self,
-                bev_query,
-                key,
-                value,
-                *args,
-                bev_h=None,
-                bev_w=None,
-                bev_pos=None,
-                spatial_shapes=None,
-                level_start_index=None,
-                valid_ratios=None,
-                prev_bev=None,
-                shift=0.,
-                **kwargs):
+                  bev_query,
+                  key,
+                  value,
+                  *args,
+                  bev_h=None,
+                  bev_w=None,
+                  bev_pos=None,
+                  spatial_shapes=None,
+                  level_start_index=None,
+                  valid_ratios=None,
+                  prev_bev=None,
+                  shift=0.,
+                  **kwargs):
         """Forward function for `TransformerDecoder`.
         Args:
             bev_query (Tensor): Input BEV query with shape
@@ -160,7 +160,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
         intermediate = []
 
         ref_3d = self.get_reference_points(
-            bev_h, bev_w, self.pc_range[5]-self.pc_range[2], self.num_points_in_pillar, dim='3d', bs=bev_query.shape[1], dtype=bev_query.dtype)
+            bev_h, bev_w, self.pc_range[5] - self.pc_range[2], self.num_points_in_pillar, dim='3d',
+            bs=bev_query.shape[1], dtype=bev_query.dtype)
         ref_2d = self.get_reference_points(
             bev_h, bev_w, dim='2d', bs=bev_query.shape[1], dtype=bev_query.dtype)
 
@@ -178,12 +179,12 @@ class BEVFormerEncoder(TransformerLayerSequence):
         if prev_bev is not None:
             prev_bev = prev_bev.permute(1, 0, 2)
             prev_bev = ops.stack(
-                [prev_bev, bev_query], 1).reshape(bs*2, len_bev, -1)
+                [prev_bev, bev_query], 1).reshape(bs * 2, len_bev, -1)
             hybird_ref_2d = ops.stack([shift_ref_2d, ref_2d], 1).reshape(
-                bs*2, len_bev, num_bev_level, 2)
+                bs * 2, len_bev, num_bev_level, 2)
         else:
             hybird_ref_2d = ops.stack([ref_2d, ref_2d], 1).reshape(
-                bs*2, len_bev, num_bev_level, 2)
+                bs * 2, len_bev, num_bev_level, 2)
 
         for lid, layer in enumerate(self.layers):
             output = layer(
@@ -258,25 +259,25 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
             ['self_attn', 'norm', 'cross_attn', 'ffn'])
 
     def construct(self,
-                query,
-                key=None,
-                value=None,
-                bev_pos=None,
-                query_pos=None,
-                key_pos=None,
-                attn_masks=None,
-                query_key_padding_mask=None,
-                key_padding_mask=None,
-                ref_2d=None,
-                ref_3d=None,
-                bev_h=None,
-                bev_w=None,
-                reference_points_cam=None,
-                mask=None,
-                spatial_shapes=None,
-                level_start_index=None,
-                prev_bev=None,
-                **kwargs):
+                  query,
+                  key=None,
+                  value=None,
+                  bev_pos=None,
+                  query_pos=None,
+                  key_pos=None,
+                  attn_masks=None,
+                  query_key_padding_mask=None,
+                  key_padding_mask=None,
+                  ref_2d=None,
+                  ref_3d=None,
+                  bev_h=None,
+                  bev_w=None,
+                  reference_points_cam=None,
+                  mask=None,
+                  spatial_shapes=None,
+                  level_start_index=None,
+                  prev_bev=None,
+                  **kwargs):
         """Forward function for `TransformerDecoderLayer`.
 
         **kwargs contains some specific arguments of attentions.
@@ -324,7 +325,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
             assert len(attn_masks) == self.num_attn, f'The length of ' \
                                                      f'attn_masks {len(attn_masks)} must be equal ' \
                                                      f'to the number of attention in ' \
-                f'operation_order {self.num_attn}'
+                                                     f'operation_order {self.num_attn}'
 
         for layer in self.operation_order:
             # temporal self attention
