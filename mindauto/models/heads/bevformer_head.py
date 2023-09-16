@@ -135,8 +135,8 @@ class BEVFormerHead(DETRHead):
         """
         bs, num_cam, _, _, _ = mlvl_feats[0].shape
         dtype = mlvl_feats[0].dtype
-        object_query_embeds = self.query_embedding.weight.astype(dtype)
-        bev_queries = self.bev_embedding.weight.astype(dtype)
+        object_query_embeds = self.query_embedding.embedding_table.astype(dtype)
+        bev_queries = self.bev_embedding.embedding_table.astype(dtype)
 
         bev_mask = ops.zeros((bs, self.bev_h, self.bev_w)).astype(dtype)
         bev_pos = self.positional_encoding(bev_mask).astype(dtype)

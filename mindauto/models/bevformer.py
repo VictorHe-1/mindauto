@@ -12,7 +12,7 @@ from .detectors import MVXTwoStageDetector
 
 def split_array(array):
     split_list = np.split(array, array.shape[0])
-    split_list = [ms.Tensor(item) for item in split_list]
+    split_list = [ms.Tensor(np.squeeze(item)) for item in split_list]
     return split_list
 
 
@@ -21,7 +21,7 @@ def restore_img_metas(kwargs, new_args):
     # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
     #                     'lidar2img': list, 'scene_token': str, 'box_type_3d: type}
     type_mapping = {
-        "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": type(LiDARInstance3DBoxes)}
+        "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": LiDARInstance3DBoxes}
     key_list = kwargs[-1].asnumpy()[0]
     img_meta_dict = {}
     for key, value in zip(key_list, kwargs[:-1]):
@@ -34,11 +34,11 @@ def restore_img_metas(kwargs, new_args):
             if last_key in ['prev_bev_exists', 'scene_token']:
                 img_meta_dict[middle_key][last_key] = value.asnumpy().item()
             elif last_key == 'lidar2img':
-                img_meta_dict[middle_key][last_key] = split_array(value.asnumpy())
+                img_meta_dict[middle_key][last_key] = split_array(value.asnumpy()[0])
             elif last_key == 'box_type_3d':
                 img_meta_dict[middle_key][last_key] = type_mapping[value.asnumpy().item()]
-            else:
-                img_meta_dict[middle_key][last_key] = value
+            else:  # can_bus
+                img_meta_dict[middle_key][last_key] = ms.Tensor(value.asnumpy()[0])
         else:
             if key == 'gt_labels_3d':
                 new_args[key] = [value[0]]
@@ -119,7 +119,6 @@ class BEVFormer(MVXTwoStageDetector):
                 img = img.reshape(B * N, C, H, W)
             if self.use_grid_mask:
                 img = self.grid_mask(img)
-
             img_feats = self.img_backbone(img)
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
