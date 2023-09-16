@@ -13,7 +13,7 @@ class BaseDetector(nn.Cell):
     """Base class for detectors."""
 
     def __init__(self, init_cfg=None):
-        super(BaseDetector, self).__init__(init_cfg)
+        super(BaseDetector, self).__init__()
         self.fp16_enabled = False
 
     @property

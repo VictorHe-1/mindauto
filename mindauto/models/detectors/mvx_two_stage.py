@@ -33,6 +33,7 @@ class MVXTwoStageDetector(Base3DDetector):
                  init_cfg=None):
         # Some args here for future use
         super(MVXTwoStageDetector, self).__init__(init_cfg=init_cfg)
+        # breakpoint()
         if pts_bbox_head:
             pts_train_cfg = train_cfg.pts if train_cfg else None
             pts_bbox_head.update(train_cfg=pts_train_cfg)
@@ -41,6 +42,7 @@ class MVXTwoStageDetector(Base3DDetector):
             self.pts_bbox_head = builder.build_head(pts_bbox_head)
 
         if img_backbone:
+            img_backbone['out_indices'] = eval(img_backbone['out_indices'])  # convert '(3, )' to tuple
             self.img_backbone = builder.build_backbone(**img_backbone)
         if img_neck is not None:
             self.img_neck = builder.build_neck(img_neck)

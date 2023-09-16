@@ -82,7 +82,6 @@ def main(cfg):
             )
 
     set_seed(cfg.system.seed)
-
     # create dataset
     loader_train = build_dataset(
         cfg.train.dataset,
@@ -105,7 +104,7 @@ def main(cfg):
     # item_list = [item for item in loader_train] item: list[Tensor] 21 elements
     # create model
     amp_level = cfg.system.get("amp_level", "O0")
-    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None), amp_level=amp_level) # TODO
+    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None), amp_level=amp_level) # TODO: Load Model
     network.init_weights()
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
@@ -115,12 +114,10 @@ def main(cfg):
 
     # build lr scheduler
     lr_scheduler = create_scheduler(num_batches, **cfg["scheduler"])
-
     # build optimizer
     cfg.optimizer.update({"lr": lr_scheduler, "loss_scale": optimizer_loss_scale})
     params = create_group_params(network.trainable_params(), **cfg.optimizer)
     optimizer = create_optimizer(params, **cfg.optimizer)
-
     # resume ckpt
     start_epoch = 0
     # build train step cell
@@ -179,9 +176,9 @@ def main(cfg):
     num_devices = device_num if device_num is not None else 1
     global_batch_size = cfg.train.loader.batch_size * num_devices * gradient_accumulation_steps
     model_name = (
-        cfg.model.name
-        if "name" in cfg.model
-        else f"{cfg.model.backbone.name}-{cfg.model.neck.name}-{cfg.model.head.name}"
+        cfg.model.type
+        if "type" in cfg.model
+        else f"{cfg.model.img_backbone.type}-{cfg.model.img_neck.type}-{cfg.model.pts_bbox_head.type}"
     )
     info_seg = "=" * 40
     logger.info(
@@ -190,7 +187,7 @@ def main(cfg):
         f"Model: {model_name}\n"
         f"Total number of parameters: {num_params}\n"
         f"Total number of trainable parameters: {num_trainable_params}\n"
-        f"Data root: {cfg.train.dataset.dataset_root}\n"
+        f"Data root: {cfg.train.dataset.data_root}\n"
         f"Optimizer: {cfg.optimizer.opt}\n"
         f"Weight decay: {cfg.optimizer.weight_decay} \n"
         f"Batch size: {cfg.train.loader.batch_size}\n"

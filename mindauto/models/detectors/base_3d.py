@@ -42,7 +42,14 @@ class Base3DDetector(BaseDetector):
         else:
             return self.aug_test(points, img_metas, img, **kwargs)
 
-    def construct(self, return_loss=True, **kwargs):
+    def construct(self,
+                  gt_labels_3d,
+                  img,
+                  tensor,
+                  box_dim,
+                  with_yaw,
+                  origin,
+                  **kwargs):
         """Calls either forward_train or forward_test depending on whether
         return_loss=True.
 
@@ -53,7 +60,8 @@ class Base3DDetector(BaseDetector):
         list[list[dict]]), with the outer list indicating test time
         augmentations.
         """
-        if return_loss:
+        # TODO: recover LiDARInstance
+        if self.training:
             return self.forward_train(**kwargs)
         else:
             return self.forward_test(**kwargs)

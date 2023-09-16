@@ -290,7 +290,8 @@ class NuScenesDataset(Custom3DDataset):
         gt_bboxes_3d = LiDARInstance3DBoxes(
             gt_bboxes_3d,
             box_dim=gt_bboxes_3d.shape[-1],
-            origin=(0.5, 0.5, 0.5)).convert_to(self.box_mode_3d)
+            origin=(0.5, 0.5, 0.5),
+            numpy_boxes=True)
 
         anns_results = dict(
             gt_bboxes_3d=gt_bboxes_3d,

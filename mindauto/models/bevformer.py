@@ -2,6 +2,7 @@ import copy
 
 import numpy as np
 import mindspore as ms
+from mindspore import ops
 
 from mindauto.core.bbox.transforms import bbox3d2result
 from mindauto.models.utils.grid_mask import GridMask
@@ -11,45 +12,48 @@ from .detectors import MVXTwoStageDetector
 
 def split_array(array):
     split_list = np.split(array, array.shape[0])
+    split_list = [ms.Tensor(item) for item in split_list]
     return split_list
 
 
-def restore_img_metas(kwargs):
+def restore_img_metas(kwargs, new_args):
+    # only support batch_size = 1
     # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
     #                     'lidar2img': list, 'scene_token': str, 'box_type_3d: type}
-    from mindauto.core.bbox.structures import LiDARInstance3DBoxes
-    type_mapping = {"<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": type(LiDARInstance3DBoxes)}
-    new_kwargs = {}
-    new_kwargs['img_metas'] = {}
-    for key, value in kwargs.items():
+    type_mapping = {
+        "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": type(LiDARInstance3DBoxes)}
+    key_list = kwargs[-1].asnumpy()[0]
+    img_meta_dict = {}
+    for key, value in zip(key_list, kwargs[:-1]):
         if key.startswith("img_metas"):
             key_list = key.split("/")
             middle_key = int(key_list[1])
             last_key = key_list[-1]
-            if middle_key not in new_kwargs['img_metas']:
-                new_kwargs['img_metas'][middle_key] = {}
-            if last_key in ['prev_bev_exists', 'scene_token', 'box_type_3d']:
-                new_kwargs['img_metas'][middle_key][last_key] = value.item()
+            if middle_key not in img_meta_dict:
+                img_meta_dict[middle_key] = {}
+            if last_key in ['prev_bev_exists', 'scene_token']:
+                img_meta_dict[middle_key][last_key] = value.asnumpy().item()
             elif last_key == 'lidar2img':
-                new_kwargs['img_metas'][middle_key][last_key] = split_array(value)
+                img_meta_dict[middle_key][last_key] = split_array(value.asnumpy())
             elif last_key == 'box_type_3d':
-                new_kwargs['img_metas'][middle_key][last_key] = type_mapping[value]
+                img_meta_dict[middle_key][last_key] = type_mapping[value.asnumpy().item()]
             else:
-                new_kwargs['img_metas'][middle_key][last_key] = value
+                img_meta_dict[middle_key][last_key] = value
         else:
-            new_kwargs[key] = value
-    return new_kwargs
+            if key == 'gt_labels_3d':
+                new_args[key] = [value[0]]
+            if key == 'img':
+                new_args[key] = value
+    new_args['img_metas'] = [img_meta_dict]
 
 
-def restore_3d_bbox(kwargs):
-    tensor = ms.Tensor(kwargs['tensor'].copy())
-    box_dim = kwargs['box_dim'].item()
-    with_yaw = kwargs['with_yaw'].item()
-    origin = tuple(kwargs['origin'].tolist())
-    kwargs['gt_bboxes_3d'] = LiDARInstance3DBoxes(tensor, box_dim, with_yaw, origin)
-    for delete_key in ['tensor', 'box_dim', 'with_yaw', 'origin']:
-        kwargs.pop(delete_key)
-    return kwargs
+def restore_3d_bbox(kwargs, new_args):
+    key_list = kwargs[-1].asnumpy().tolist()[0]
+    tensor = kwargs[key_list.index('tensor')][0]
+    box_dim = kwargs[key_list.index('box_dim')].asnumpy().item()
+    with_yaw = kwargs[key_list.index('with_yaw')].asnumpy().item()
+    origin = tuple(kwargs[key_list.index('origin')].asnumpy()[0].tolist())
+    new_args['gt_bboxes_3d'] = LiDARInstance3DBoxes(tensor, box_dim, with_yaw, origin)
 
 
 class BEVFormer(MVXTwoStageDetector):
@@ -90,12 +94,10 @@ class BEVFormer(MVXTwoStageDetector):
 
         # temporal
         self.video_test_mode = video_test_mode
-        self.prev_frame_info = {
-            'prev_bev': None,
-            'scene_token': None,
-            'prev_pos': 0,
-            'prev_angle': 0,
-        }
+        self.prev_bev = ms.Parameter(ops.zeros(()), name='prev_bev')  # ops.zeros() replace None
+        self.scene_token = ms.Parameter(ops.zeros(()), name='scene_token')
+        self.prev_pos = ms.Parameter(0, name='prev_pos')
+        self.prev_angle = ms.Parameter(0, name='prev_angle')
 
     def init_weights(self):
         self.pts_bbox_head.init_weights()
@@ -174,7 +176,9 @@ class BEVFormer(MVXTwoStageDetector):
         dummy_metas = None
         return self.forward_test(img=img, img_metas=[[dummy_metas]])
 
-    def construct(self, return_loss=True, **kwargs):
+    def construct(self,
+                  *args,
+                  **kwargs):
         """Calls either forward_train or forward_test depending on whether
         return_loss=True.
         Note this setting will change the expected inputs. When
@@ -184,17 +188,18 @@ class BEVFormer(MVXTwoStageDetector):
         list[list[dict]]), with the outer list indicating test time
         augmentations.
         """
-        kwargs = restore_img_metas(kwargs)
-        kwargs = restore_3d_bbox(kwargs)
-        if return_loss:
-            return self.forward_train(**kwargs)
+        new_args = {}
+        restore_img_metas(args, new_args)
+        restore_3d_bbox(args, new_args)
+        if self.training:
+            return self.forward_train(**new_args)
         else:
-            return self.forward_test(**kwargs)
+            return self.forward_test(**new_args)
 
     def obtain_history_bev(self, imgs_queue, img_metas_list):
         """Obtain history BEV features iteratively. To save GPU memory, gradients are not calculated.
         """
-        self.eval()  # TODO
+        self.set_train(False)
 
         prev_bev = None
         bs, len_queue, num_cams, C, H, W = imgs_queue.shape
@@ -209,7 +214,7 @@ class BEVFormer(MVXTwoStageDetector):
             prev_bev = self.pts_bbox_head(
                 img_feats, img_metas, prev_bev, only_bev=True)
 
-        self.train()  # TODO
+        self.set_train(True)
         return prev_bev
 
     def forward_train(self,
@@ -275,32 +280,32 @@ class BEVFormer(MVXTwoStageDetector):
                     name, type(var)))
         img = [img] if img is None else img
 
-        if img_metas[0][0]['scene_token'] != self.prev_frame_info['scene_token']:
+        if img_metas[0][0]['scene_token'] != self.scene_token:
             # the first sample of each scene is truncated
-            self.prev_frame_info['prev_bev'] = None
+            self.prev_bev.set_data(ops.zeros(()))
         # update idx
-        self.prev_frame_info['scene_token'] = img_metas[0][0]['scene_token']
+        self.scene_token.set_data(img_metas[0][0]['scene_token'])
 
         # do not use temporal information
         if not self.video_test_mode:
-            self.prev_frame_info['prev_bev'] = None
+            self.prev_bev.set_data(ops.zeros(()))
 
         # Get the delta of ego position and angle between two timestamps.
         tmp_pos = copy.deepcopy(img_metas[0][0]['can_bus'][:3])
         tmp_angle = copy.deepcopy(img_metas[0][0]['can_bus'][-1])
-        if self.prev_frame_info['prev_bev'] is not None:
-            img_metas[0][0]['can_bus'][:3] -= self.prev_frame_info['prev_pos']
-            img_metas[0][0]['can_bus'][-1] -= self.prev_frame_info['prev_angle']
+        if self.prev_bev.shape != ():  # self.prev_bev is not None
+            img_metas[0][0]['can_bus'][:3] -= self.prev_pos
+            img_metas[0][0]['can_bus'][-1] -= self.prev_angle
         else:
             img_metas[0][0]['can_bus'][-1] = 0
             img_metas[0][0]['can_bus'][:3] = 0
 
         new_prev_bev, bbox_results = self.simple_test(
-            img_metas[0], img[0], prev_bev=self.prev_frame_info['prev_bev'], **kwargs)
+            img_metas[0], img[0], prev_bev=self.prev_bev, **kwargs)
         # During inference, we save the BEV features and ego motion of each timestamp.
-        self.prev_frame_info['prev_pos'] = tmp_pos
-        self.prev_frame_info['prev_angle'] = tmp_angle
-        self.prev_frame_info['prev_bev'] = new_prev_bev
+        self.prev_pos.set_data(tmp_pos)
+        self.prev_angle.set_data(tmp_angle)
+        self.prev_bev.set_data(new_prev_bev)
         return bbox_results
 
     def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False):
