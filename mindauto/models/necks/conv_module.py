@@ -24,13 +24,12 @@ class ConvModule(nn.Cell):
         assert conv_cfg is None or isinstance(conv_cfg, dict)
         assert norm_cfg is None or isinstance(norm_cfg, dict)
         assert act_cfg is None or isinstance(act_cfg, dict)
-        official_padding_mode = ['zeros', 'circular']
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.inplace = inplace
         self.with_spectral_norm = with_spectral_norm
-        self.with_explicit_padding = padding_mode not in official_padding_mode
+        self.with_explicit_padding = False
         self.order = order
         assert isinstance(self.order, tuple) and len(self.order) == 3
         assert set(order) == set(['conv', 'norm', 'act'])
