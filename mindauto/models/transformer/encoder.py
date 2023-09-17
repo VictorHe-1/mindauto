@@ -76,8 +76,9 @@ class BEVFormerEncoder(TransformerLayerSequence):
         lidar2img = []
         for img_meta in img_metas:
             lidar2img.append(img_meta['lidar2img'])
-        lidar2img = np.asarray(lidar2img)
-        lidar2img = ms.Tensor(lidar2img, dtype=reference_points.dtype)  # (B, N, 4, 4)
+        lidar2img = np.asarray(lidar2img)  # (B, N, 4, 4)
+        old_reference_points = reference_points
+
         reference_points = reference_points.asnumpy()  # modified
 
         reference_points[..., 0:1] = reference_points[..., 0:1] * \
@@ -87,27 +88,25 @@ class BEVFormerEncoder(TransformerLayerSequence):
         reference_points[..., 2:3] = reference_points[..., 2:3] * \
                                      (pc_range[5] - pc_range[2]) + pc_range[2]
 
-        reference_points = ops.cat(
-            (reference_points, ops.ones_like(ms.Tensor(reference_points[..., :1]))), -1)
-        reference_points = ms.Tensor(reference_points)
-        reference_points = reference_points.permute(1, 0, 2, 3)
+        reference_points = np.concatenate(
+            (reference_points, np.ones_like(reference_points[..., :1])), axis=-1)
+
+        reference_points = np.transpose(reference_points, (1, 0, 2, 3))
         D, B, num_query = reference_points.shape[:3]
         num_cam = lidar2img.shape[1]
 
-        reference_points = reference_points.view(
-            D, B, 1, num_query, 4).tile((1, 1, num_cam, 1, 1)).unsqueeze(-1)
+        reference_points = np.reshape(reference_points, (D, B, 1, num_query, 4))
+        reference_points = np.tile(reference_points, (1, 1, num_cam, 1, 1))
+        reference_points = np.expand_dims(reference_points, axis=-1)
 
-        lidar2img = lidar2img.view(
-            1, B, num_cam, 1, 4, 4).tile((D, 1, 1, num_query, 1, 1))
-
-        reference_points_cam = ops.matmul(lidar2img.astype(ms.float32),
-                                          reference_points.astype(ms.float32)).squeeze(-1)
+        lidar2img = np.reshape(lidar2img, (1, B, num_cam, 1, 4, 4))
+        lidar2img = np.tile(lidar2img, (D, 1, 1, num_query, 1, 1))
+        reference_points_cam = np.squeeze(lidar2img @ reference_points, axis=-1)
         eps = 1e-5
 
         bev_mask = (reference_points_cam[..., 2:3] > eps)
-        reference_points_cam = reference_points_cam[..., 0:2] / ops.maximum(
-            reference_points_cam[..., 2:3], ops.ones_like(reference_points_cam[..., 2:3]) * eps)
-
+        reference_points_cam = reference_points_cam[..., 0:2] / np.maximum(
+            reference_points_cam[..., 2:3], np.ones_like(reference_points_cam[..., 2:3]) * eps)
         reference_points_cam[..., 0] /= img_metas[0]['img_shape'][0][1]
         reference_points_cam[..., 1] /= img_metas[0]['img_shape'][0][0]
 
@@ -116,11 +115,12 @@ class BEVFormerEncoder(TransformerLayerSequence):
                     & (reference_points_cam[..., 0:1] < 1.0)
                     & (reference_points_cam[..., 0:1] > 0.0))
 
-        bev_mask = ms.Tensor(np.nan_to_num(bev_mask.asnumpy()))
+        bev_mask = np.nan_to_num(bev_mask)
 
-        reference_points_cam = reference_points_cam.permute(2, 1, 3, 0, 4)
-        bev_mask = bev_mask.permute(2, 1, 3, 0, 4).squeeze(-1)
-
+        reference_points_cam = np.transpose(reference_points_cam, (2, 1, 3, 0, 4))
+        bev_mask = np.squeeze(np.transpose(bev_mask, (2, 1, 3, 0, 4)), axis=-1)
+        reference_points_cam = ms.Tensor(reference_points_cam, dtype=old_reference_points.dtype)
+        bev_mask = ms.Tensor(bev_mask, dtype=old_reference_points.dtype)
         return reference_points_cam, bev_mask
 
     def construct(self,

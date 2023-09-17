@@ -37,6 +37,9 @@ def restore_img_metas(kwargs, new_args):
                 img_meta_dict[middle_key][last_key] = split_array(value.asnumpy()[0])
             elif last_key == 'box_type_3d':
                 img_meta_dict[middle_key][last_key] = type_mapping[value.asnumpy().item()]
+            elif last_key == 'img_shape':
+                img_shape = value.asnumpy()[0]
+                img_meta_dict[middle_key][last_key] = [tuple(each) for each in img_shape]
             else:  # can_bus
                 img_meta_dict[middle_key][last_key] = ms.Tensor(value.asnumpy()[0])
         else:

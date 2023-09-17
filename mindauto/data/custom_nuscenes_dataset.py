@@ -173,10 +173,9 @@ class CustomNuScenesDataset(NuScenesDataset):
         data['origin'] = np.array(gt_bbox_3d.input_origin)
         ordered_key.extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
         data.pop('gt_bboxes_3d')
-
         queue_length = 0
         for key, value in data['img_metas'].items():
-            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
+            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
                 new_key_list = ['img_metas', str(key), sub_key]
                 new_key = "/".join(new_key_list)
                 if sub_key == 'box_type_3d':

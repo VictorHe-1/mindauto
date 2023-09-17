@@ -131,12 +131,12 @@ def build_dataset(
     dataset_config['output_columns'].pop(0)  # delete gt_bboxes_3d
     if is_train:
         for i in range(dataset_config['queue_length']):
-            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
+            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
                 combined_columns = 'img_metas/'+str(i) + '/' + sub_key
                 dataset_config['output_columns'].append(combined_columns)
     else:
         for i in range(dataset_config['train_queue_length'] + 1):
-            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d']:
+            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
                 combined_columns = 'img_metas/'+str(i) + '/' + sub_key
                 dataset_config['output_columns'].append(combined_columns)
         dataset_config.pop('train_queue_length')
