@@ -1,6 +1,7 @@
 import math
 import warnings
 
+import numpy as np
 import mindspore as ms
 from mindspore import ops, nn
 
@@ -61,7 +62,6 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
                 key_padding_mask=key_padding_mask,
                 **kwargs)
             output = output.permute(1, 0, 2)
-
             if reg_branches is not None:
                 tmp = reg_branches[lid](output)
 
@@ -252,7 +252,6 @@ class CustomMSDeformableAttention(nn.Cell):
         if key_padding_mask is not None:
             value = value.masked_fill(key_padding_mask[..., None], 0.0)
         value = value.view(bs, num_value, self.num_heads, -1)
-
         sampling_offsets = self.sampling_offsets(query).view(
             bs, num_query, self.num_heads, self.num_levels, self.num_points, 2)
         attention_weights = self.attention_weights(query).view(
@@ -264,8 +263,9 @@ class CustomMSDeformableAttention(nn.Cell):
                                                    self.num_levels,
                                                    self.num_points)
         if reference_points.shape[-1] == 2:
-            offset_normalizer = ops.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
+            offset_normalizer = np.stack(
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1)
+            offset_normalizer = ms.Tensor(offset_normalizer, dtype=ms.float32)
             sampling_locations = reference_points[:, :, None, :, None, :] \
                                  + sampling_offsets \
                                  / offset_normalizer[None, None, None, :, None, :]
