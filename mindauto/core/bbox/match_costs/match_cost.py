@@ -112,5 +112,5 @@ class BBox3DL1Cost(object):
         Returns:
             torch.Tensor: bbox_cost value with weight
         """
-        bbox_cost = ops.cdist(bbox_pred, gt_bboxes, p=1)
+        bbox_cost = ops.cdist(bbox_pred, gt_bboxes, p=1.0)
         return bbox_cost * self.weight
