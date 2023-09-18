@@ -155,7 +155,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 return_intermediate is `False`, otherwise it has shape
                 [num_layers, num_query, bs, embed_dims].
         """
-
         output = bev_query
         intermediate = []
 
@@ -164,7 +163,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
             bs=bev_query.shape[1], dtype=bev_query.dtype)
         ref_2d = self.get_reference_points(
             bev_h, bev_w, dim='2d', bs=bev_query.shape[1], dtype=bev_query.dtype)
-
         reference_points_cam, bev_mask = self.point_sampling(
             ref_3d, self.pc_range, kwargs['img_metas'])
 
@@ -203,7 +201,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 bev_mask=bev_mask,
                 prev_bev=prev_bev,
                 **kwargs)
-
             bev_query = output
             if self.return_intermediate:
                 intermediate.append(output)
@@ -308,7 +305,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         Returns:
             Tensor: forwarded results with shape [num_queries, bs, embed_dims].
         """
-
+        spatial_shapes = spatial_shapes.asnumpy().astype(np.int64)
         norm_index = 0
         attn_index = 0
         ffn_index = 0
@@ -330,7 +327,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         for layer in self.operation_order:
             # temporal self attention
             if layer == 'self_attn':
-
                 query = self.attentions[attn_index](
                     query,
                     prev_bev,
@@ -341,7 +337,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     attn_mask=attn_masks[attn_index],
                     key_padding_mask=query_key_padding_mask,
                     reference_points=ref_2d,
-                    spatial_shapes=ms.Tensor([[bev_h, bev_w]]),
+                    spatial_shapes=np.array([[bev_h, bev_w]]),
                     level_start_index=ms.Tensor([0]),
                     **kwargs)
                 attn_index += 1

@@ -1,6 +1,7 @@
 import warnings
 import math
 
+import numpy as np
 import mindspore as ms
 from mindspore import nn, ops
 import mindspore.common.initializer as init
@@ -184,8 +185,9 @@ class MSDeformableAttention3D(nn.Cell):
             For each referent point, we sample `num_points` sampling points.
             For `num_Z_anchors` reference points,  it has overall `num_points * num_Z_anchors` sampling points.
             """
-            offset_normalizer = ops.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
+            offset_normalizer = np.stack(
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1)
+            offset_normalizer = ms.Tensor(offset_normalizer, dtype=ms.float32)
 
             bs, num_query, num_Z_anchors, xy = reference_points.shape
             reference_points = reference_points[:, :, None, None, None, :, :]

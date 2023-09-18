@@ -41,7 +41,7 @@ def restore_img_metas(kwargs, new_args):
                 img_shape = value.asnumpy()[0]
                 img_meta_dict[middle_key][last_key] = [tuple(each) for each in img_shape]
             else:  # can_bus
-                img_meta_dict[middle_key][last_key] = ms.Tensor(value.asnumpy()[0])
+                img_meta_dict[middle_key][last_key] = value.asnumpy()[0]
         else:
             if key == 'gt_labels_3d':
                 new_args[key] = [value[0]]
@@ -116,7 +116,7 @@ class BEVFormer(MVXTwoStageDetector):
             #     img_meta.update(input_shape=input_shape)
 
             if img.ndim == 5 and img.shape[0] == 1:
-                img.squeeze()
+                img = ops.squeeze(img)
             elif img.ndim == 5 and img.shape[0] > 1:
                 B, N, C, H, W = img.shape
                 img = img.reshape(B * N, C, H, W)
@@ -268,6 +268,7 @@ class BEVFormer(MVXTwoStageDetector):
             prev_bev = None
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
         losses = dict()
+        # breakpoint()
         losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
                                             gt_labels_3d, img_metas,
                                             gt_bboxes_ignore, prev_bev)
