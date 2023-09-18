@@ -1,6 +1,7 @@
 import warnings
 import math
 
+import numpy as np
 from mindspore import nn, ops
 import mindspore as ms
 
@@ -142,7 +143,7 @@ class TemporalSelfAttention(nn.Cell):
                 form reference boxes.
             key_padding_mask (Tensor): ByteTensor for `query`, with
                 shape [bs, num_key].
-            spatial_shapes (Tensor): Spatial shape of features in
+            spatial_shapes (Numpy.ndarry): Spatial shape of features in
                 different levels. With shape (num_levels, 2),
                 last dimension represents (h, w).
             level_start_index (Tensor): The start index of each level.
@@ -197,14 +198,13 @@ class TemporalSelfAttention(nn.Cell):
             .reshape(bs * self.num_bev_queue, num_query, self.num_heads, self.num_levels, self.num_points)
         sampling_offsets = sampling_offsets.permute(0, 3, 1, 2, 4, 5, 6) \
             .reshape(bs * self.num_bev_queue, num_query, self.num_heads, self.num_levels, self.num_points, 2)
-
         if reference_points.shape[-1] == 2:
-            offset_normalizer = ops.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], -1)
+            offset_normalizer = np.stack(
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1)
+            offset_normalizer = ms.Tensor(offset_normalizer, dtype=ms.float32)
             sampling_locations = reference_points[:, :, None, :, None, :] \
                                  + sampling_offsets \
                                  / offset_normalizer[None, None, None, :, None, :]
-
         elif reference_points.shape[-1] == 4:
             sampling_locations = reference_points[:, :, None, :, None, :2] \
                                  + sampling_offsets / self.num_points \
@@ -217,7 +217,6 @@ class TemporalSelfAttention(nn.Cell):
 
         output = multi_scale_deformable_attn_pytorch(
             value, spatial_shapes, sampling_locations, attention_weights)
-
         # output shape (bs*num_bev_queue, num_query, embed_dims)
         # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
         output = output.permute(1, 2, 0)

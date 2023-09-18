@@ -8,7 +8,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     Args:
         value (Tensor): The value has shape
             (bs, num_keys, mum_heads, embed_dims//num_heads)
-        value_spatial_shapes (Tensor): Spatial shape of
+        value_spatial_shapes (np.ndarray): Spatial shape of
             each feature map, has shape (num_levels, 2),
             last dimension 2 represent (h, w)
         sampling_locations (Tensor): The location of sampling points,
@@ -26,7 +26,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, num_heads, num_levels, num_points, _ =\
         sampling_locations.shape
-    value_spatial_shapes = value_spatial_shapes.asnumpy().tolist()  # TODO: Does this affect gradients?
+    value_spatial_shapes = value_spatial_shapes.tolist()
     value_list = value.split([H_ * W_ for H_, W_ in value_spatial_shapes],
                              axis=1)
     sampling_grids = 2 * sampling_locations - 1
