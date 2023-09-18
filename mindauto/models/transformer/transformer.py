@@ -203,9 +203,9 @@ class PerceptionTransformer(nn.Cell):
     def init_layers(self):
         """Initialize layers of the Detr3DTransformer."""
         self.level_embeds = ms.Parameter(np.random.randn(
-            self.num_feature_levels, self.embed_dims))
+            self.num_feature_levels, self.embed_dims).astype(np.float32))
         self.cams_embeds = ms.Parameter(
-            np.random.randn(self.num_cams, self.embed_dims))
+            np.random.randn(self.num_cams, self.embed_dims).astype(np.float32))
         self.reference_points = nn.Dense(self.embed_dims, 3)
         self.can_bus_mlp = nn.SequentialCell(
             nn.Dense(18, self.embed_dims // 2, weight_init='XavierUniform', bias_init='Zero'),
@@ -260,7 +260,6 @@ class PerceptionTransformer(nn.Cell):
         """
         obtain bev features.
         """
-
         bs = mlvl_feats[0].shape[0]
         bev_queries = bev_queries.unsqueeze(1).tile((1, bs, 1))
         bev_pos = ops.flatten(bev_pos, start_dim=2).permute(2, 0, 1)
@@ -320,13 +319,12 @@ class PerceptionTransformer(nn.Cell):
             feat_flatten.append(feat)
 
         feat_flatten = ops.cat(feat_flatten, 2)
-        spatial_shapes = ms.Tensor(spatial_shapes, ms.float32)
+        spatial_shapes = ms.Tensor(spatial_shapes, dtype=ms.float32)
         level_start_index = ops.cat((spatial_shapes.new_zeros(
             (1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
 
         feat_flatten = feat_flatten.permute(
             0, 2, 1, 3)  # (num_cam, H*W, bs, embed_dims)
-
         bev_embed = self.encoder(
             bev_queries,
             feat_flatten,
