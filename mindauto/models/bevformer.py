@@ -273,7 +273,10 @@ class BEVFormer(MVXTwoStageDetector):
                                             gt_bboxes_ignore, prev_bev)
 
         losses.update(losses_pts)
-        return losses
+        total_loss = ms.Tensor(0.0)
+        for _, each_loss in losses.items():
+            total_loss += each_loss
+        return total_loss
 
     def forward_test(self, img_metas, img=None, **kwargs):
         for var, name in [(img_metas, 'img_metas')]:
