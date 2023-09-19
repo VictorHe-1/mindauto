@@ -140,7 +140,6 @@ class BEVFormerHead(DETRHead):
 
         bev_mask = ops.zeros((bs, self.bev_h, self.bev_w)).astype(dtype)
         bev_pos = self.positional_encoding(bev_mask).astype(dtype)
-
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
             return self.transformer.get_bev_features(
                 mlvl_feats,
@@ -168,7 +167,6 @@ class BEVFormerHead(DETRHead):
                 img_metas=img_metas,
                 prev_bev=prev_bev
             )
-
         bev_embed, hs, init_reference, inter_references = outputs
         hs = hs.permute(0, 2, 1, 3)
         outputs_classes = []
@@ -249,22 +247,19 @@ class BEVFormerHead(DETRHead):
 
         assign_result = self.assigner.assign(bbox_pred, cls_score, gt_bboxes,
                                              gt_labels, gt_bboxes_ignore)
-
         sampling_result = self.sampler.sample(assign_result, bbox_pred,
                                               gt_bboxes)
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
-
         # label targets
-        labels = ops.full((num_bboxes,), self.num_classes)
-        labels[pos_inds] = gt_labels[sampling_result.pos_assigned_gt_inds]
+        labels = ops.full((num_bboxes,), self.num_classes, dtype=ms.int32)
+        labels[pos_inds] = ms.Tensor(gt_labels[sampling_result.pos_assigned_gt_inds], dtype=ms.int32)
         label_weights = gt_bboxes.new_ones(num_bboxes)
 
         # bbox targets
         bbox_targets = ops.zeros_like(bbox_pred)[..., :gt_c]
         bbox_weights = ops.zeros_like(bbox_pred)
         bbox_weights[pos_inds] = 1.0
-
         # DETR
         bbox_targets[pos_inds] = sampling_result.pos_gt_bboxes
         return (labels, label_weights, bbox_targets, bbox_weights,
@@ -316,8 +311,8 @@ class BEVFormerHead(DETRHead):
          bbox_weights_list, pos_inds_list, neg_inds_list) = multi_apply(
             self._get_target_single, cls_scores_list, bbox_preds_list,
             gt_labels_list, gt_bboxes_list, gt_bboxes_ignore_list)
-        num_total_pos = sum((inds.numel() for inds in pos_inds_list))
-        num_total_neg = sum((inds.numel() for inds in neg_inds_list))
+        num_total_pos = sum((np.array(inds).size for inds in pos_inds_list))
+        num_total_neg = sum((np.array(inds).size for inds in neg_inds_list))
         return (labels_list, label_weights_list, bbox_targets_list,
                 bbox_weights_list, num_total_pos, num_total_neg)
 
@@ -431,7 +426,6 @@ class BEVFormerHead(DETRHead):
         all_bbox_preds = preds_dicts['all_bbox_preds']
         enc_cls_scores = preds_dicts['enc_cls_scores']
         enc_bbox_preds = preds_dicts['enc_bbox_preds']
-
         num_dec_layers = len(all_cls_scores)
 
         gt_bboxes_list = [ops.cat(

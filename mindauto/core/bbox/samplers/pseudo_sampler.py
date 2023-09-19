@@ -1,13 +1,14 @@
-from mindspore import ops
-import mindspore as ms
+import numpy as np
 
 from .base_sampler import BaseSampler
 from .sampling_result import SamplingResult
 
 
 class PseudoSampler(BaseSampler):
-    """A pseudo sampler that does not do sampling actually."""
-
+    """
+    A pseudo sampler that does not do sampling actually.
+    from mmdet.core.bbox.samplers import pseudo_sampler
+    """
     def __init__(self, **kwargs):
         pass
 
@@ -30,11 +31,10 @@ class PseudoSampler(BaseSampler):
         Returns:
             :obj:`SamplingResult`: sampler results
         """
-        pos_inds = ops.unique(ops.nonzero(
-            assign_result.gt_inds > 0).squeeze(-1))
-        neg_inds = ops.unique(ops.nonzero(
-            assign_result.gt_inds == 0).squeeze(-1))
-        gt_flags = bboxes.new_zeros(bboxes.shape[0], dtype=ms.uint8)
+        pos_inds = np.unique(np.squeeze(np.nonzero(assign_result.gt_inds > 0))).tolist()
+        neg_inds = np.unique(np.squeeze(np.nonzero(assign_result.gt_inds == 0))).tolist()
+        # gt_flags = bboxes.new_zeros(bboxes.shape[0], dtype=ms.uint8)
+        gt_flags = np.zeros(bboxes.shape[0], dtype=np.uint8)
         sampling_result = SamplingResult(pos_inds, neg_inds, bboxes, gt_bboxes,
                                          assign_result, gt_flags)
         return sampling_result

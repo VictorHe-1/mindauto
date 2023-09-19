@@ -44,7 +44,7 @@ def restore_img_metas(kwargs, new_args):
                 img_meta_dict[middle_key][last_key] = value.asnumpy()[0]
         else:
             if key == 'gt_labels_3d':
-                new_args[key] = [value[0]]
+                new_args[key] = [value[0].asnumpy()]
             if key == 'img':
                 new_args[key] = value
     new_args['img_metas'] = [img_meta_dict]
@@ -56,7 +56,7 @@ def restore_3d_bbox(kwargs, new_args):
     box_dim = kwargs[key_list.index('box_dim')].asnumpy().item()
     with_yaw = kwargs[key_list.index('with_yaw')].asnumpy().item()
     origin = tuple(kwargs[key_list.index('origin')].asnumpy()[0].tolist())
-    new_args['gt_bboxes_3d'] = LiDARInstance3DBoxes(tensor, box_dim, with_yaw, origin)
+    new_args['gt_bboxes_3d'] = [LiDARInstance3DBoxes(tensor, box_dim, with_yaw, origin)]
 
 
 class BEVFormer(MVXTwoStageDetector):
@@ -192,6 +192,7 @@ class BEVFormer(MVXTwoStageDetector):
         new_args = {}
         restore_img_metas(args, new_args)
         restore_3d_bbox(args, new_args)
+
         if self.training:
             return self.forward_train(**new_args)
         else:

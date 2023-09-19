@@ -164,7 +164,7 @@ class CustomNuScenesDataset(NuScenesDataset):
     def convert_data_to_numpy(self, data):
         # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
         ordered_key = ['gt_labels_3d', 'img']
-
+        data['gt_labels_3d'] = data['gt_labels_3d'].astype(np.int32)
         # convert gt_bboxes_3d (LiDARInstance3D) to numpy array
         gt_bbox_3d = data['gt_bboxes_3d']
         data['tensor'] = gt_bbox_3d.input_tensor

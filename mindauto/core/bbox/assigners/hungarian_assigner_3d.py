@@ -1,5 +1,4 @@
-import mindspore as ms
-from mindspore import ops
+import numpy as np
 
 from .assign_result import AssignResult
 from .base_assigner import BaseAssigner
@@ -87,8 +86,8 @@ class HungarianAssigner3D(BaseAssigner):
         num_gts, num_bboxes = gt_bboxes.shape[0], bbox_pred.shape[0]
 
         # 1. assign -1 by default
-        assigned_gt_inds = ops.full((num_bboxes,), -1)
-        assigned_labels = ops.full((num_bboxes,), -1)
+        assigned_gt_inds = np.full((num_bboxes,), -1, dtype=np.int32)
+        assigned_labels = np.full((num_bboxes,), -1, dtype=np.int32)
         if num_gts == 0 or num_bboxes == 0:
             # No ground truth or boxes, return empty assignment
             if num_gts == 0:
@@ -114,8 +113,6 @@ class HungarianAssigner3D(BaseAssigner):
             raise ImportError('Please run "pip install scipy" '
                               'to install scipy first.')
         matched_row_inds, matched_col_inds = linear_sum_assignment(cost)
-        matched_row_inds = ms.Tensor(matched_row_inds)
-        matched_col_inds = ms.Tensor(matched_col_inds)
 
         # 4. assign backgrounds and foregrounds
         # assign all indices to backgrounds first
