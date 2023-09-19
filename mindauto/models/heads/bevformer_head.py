@@ -4,6 +4,7 @@ import numpy as np
 import mindspore as ms
 from mindspore import nn, ops
 import mindspore.common.initializer as init
+from mindspore.communication.management import GlobalComm
 
 from mindauto.core.bbox.coders import build_bbox_coder
 from mindauto.models.transformer import inverse_sigmoid
@@ -358,9 +359,9 @@ class BEVFormerHead(DETRHead):
         # construct weighted avg_factor to match with the official DETR repo
         cls_avg_factor = num_total_pos * 1.0 + \
                          num_total_neg * self.bg_cls_weight
-        if self.sync_cls_avg_factor:
+        if self.sync_cls_avg_factor and GlobalComm.INITED:  # in distribute mode
             cls_avg_factor = reduce_mean(
-                cls_scores.new_tensor([cls_avg_factor]))
+                ms.Tensor([cls_avg_factor], dtype=cls_scores.dtype))
 
         cls_avg_factor = max(cls_avg_factor, 1)
         loss_cls = self.loss_cls(
@@ -369,14 +370,16 @@ class BEVFormerHead(DETRHead):
         # Compute the average number of gt boxes accross all gpus, for
         # normalization purposes
         num_total_pos = ms.Tensor([num_total_pos], dtype=loss_cls.dtype)
-        num_total_pos = ops.clamp(reduce_mean(num_total_pos), min=1).item()
+        if GlobalComm.INITED:
+            num_total_pos = ops.clamp(reduce_mean(num_total_pos), min=1).item()
+        else:
+            num_total_pos = ops.clamp(num_total_pos, min=1).item()
 
         # regression L1 loss
-        bbox_preds = bbox_preds.reshape(-1, bbox_preds.size(-1))
+        bbox_preds = bbox_preds.reshape(-1, bbox_preds.shape[-1])
         normalized_bbox_targets = normalize_bbox(bbox_targets, self.pc_range)
         isnotnan = ops.isfinite(normalized_bbox_targets).all(axis=-1)
         bbox_weights = bbox_weights * self.code_weights
-
         loss_bbox = self.loss_bbox(
             bbox_preds[isnotnan, :10], normalized_bbox_targets[isnotnan,
                                        :10], bbox_weights[isnotnan, :10],
@@ -447,7 +450,7 @@ class BEVFormerHead(DETRHead):
         # loss of proposal generated from encode feature map.
         if enc_cls_scores is not None:
             binary_labels_list = [
-                ops.zeros_like(gt_labels_list[i])
+                ops.zeros_like(ms.Tensor(gt_labels_list[i]))
                 for i in range(len(all_gt_labels_list))
             ]
             enc_loss_cls, enc_losses_bbox = \
