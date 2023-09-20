@@ -1,0 +1,1 @@
+python tools/train.py --config configs/BEVFormer/bevformer_tiny.yaml

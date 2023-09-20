@@ -127,22 +127,22 @@ def build_dataset(
     dataset_class = eval(dataset_class_name)
 
     # Add some columns for img_meta conversion
-    dataset_config['output_columns'].pop(0)  # delete img_metas
-    dataset_config['output_columns'].pop(0)  # delete gt_bboxes_3d
     if is_train:
+        dataset_config['output_columns'].pop(0)  # delete img_metas
+        dataset_config['output_columns'].pop(0)  # delete gt_bboxes_3d
         for i in range(dataset_config['queue_length']):
             for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
                 combined_columns = 'img_metas/'+str(i) + '/' + sub_key
                 dataset_config['output_columns'].append(combined_columns)
+        dataset_config['output_columns'].extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
     else:
-        for i in range(dataset_config['train_queue_length'] + 1):
-            for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
-                combined_columns = 'img_metas/'+str(i) + '/' + sub_key
-                dataset_config['output_columns'].append(combined_columns)
-        dataset_config.pop('train_queue_length')
+        dataset_config['output_columns'].pop(0)
+        for sub_key in ['img_shape', 'lidar2img', 'box_type_3d', 'scene_token', 'can_bus']:
+            combined_columns = 'img_metas/'+ sub_key
+            dataset_config['output_columns'].append(combined_columns)
 
-    dataset_config['output_columns'].extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
     dataset_config['output_columns'].append('ordered_key')
+    dataset_config['test_mode'] = not is_train
     dataset = dataset_class(**dataset_config)
 
     dataset_column_names = dataset.get_output_columns()
@@ -204,7 +204,7 @@ def build_dataset(
         # per_batch_map=per_batch_map, # uncommet to use inner-batch transformation
     )
 
-    return dataloader
+    return dataset, dataloader
 
 
 def _check_dataset_paths(dataset_config):

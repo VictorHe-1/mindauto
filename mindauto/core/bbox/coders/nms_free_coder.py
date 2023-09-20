@@ -1,3 +1,4 @@
+import numpy as np
 import mindspore as ms
 from mindauto.core.bbox.util import denormalize_bbox
 from .base_bbox_coder import BaseBBoxCoder
@@ -68,23 +69,22 @@ class NMSFreeCoder(BaseBBoxCoder):
                 thresh_mask = final_scores >= tmp_score
 
         if self.post_center_range is not None:
-            self.post_center_range = ms.Tensor(self.post_center_range)
-            mask = (final_box_preds[..., :3] >=
-                    self.post_center_range[:3]).all(1)
-            mask &= (final_box_preds[..., :3] <=
-                     self.post_center_range[3:]).all(1)
+            numpy_box_preds = final_box_preds.asnumpy()
+            numpy_scores = final_scores.asnumpy()
+            numpy_preds = final_preds.asnumpy()
+            mask = np.all(numpy_box_preds[..., :3] >= self.post_center_range[:3], axis=1)
+            mask &= np.all(numpy_box_preds[..., :3] <= self.post_center_range[3:], axis=1)
 
             if self.score_threshold:
                 mask &= thresh_mask
+            boxes3d = numpy_box_preds[mask]
+            scores = numpy_scores[mask]
 
-            boxes3d = final_box_preds[mask]
-            scores = final_scores[mask]
-
-            labels = final_preds[mask]
+            labels = numpy_preds[mask]
             predictions_dict = {
-                'bboxes': boxes3d,
-                'scores': scores,
-                'labels': labels
+                'bboxes': ms.Tensor(boxes3d, dtype=ms.float32),
+                'scores': ms.Tensor(scores, dtype=ms.float32),
+                'labels': ms.Tensor(labels, dtype=ms.int32)
             }
 
         else:

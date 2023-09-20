@@ -1,0 +1,1 @@
+python tools/test.py --config configs/BEVFormer/bevformer_tiny.yaml --eval bbox

@@ -194,6 +194,24 @@ class CustomNuScenesDataset(NuScenesDataset):
         numpy_data.append(np.array(ordered_key))
         return tuple(numpy_data)
 
+    def convert_data_to_numpy_test(self, data):
+        # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
+        ordered_key = ['img']
+        for key, value in data['img_metas'][0].items():
+            if key in ['can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
+                new_key_list = ['img_metas', key]
+                new_key = "/".join(new_key_list)
+                if key == 'box_type_3d':
+                    data[new_key] = np.array(str(value))  # MS limit: convert object to str
+                else:
+                    data[new_key] = np.array(value)
+                ordered_key.append(new_key)
+        data.pop('img_metas')
+        numpy_data = []
+        for key in ordered_key:
+            numpy_data.append(data[key])
+        numpy_data.append(np.array(ordered_key))
+        return tuple(numpy_data)
 
     def __getitem__(self, idx):
         """Get item from infos according to the given index.
@@ -201,14 +219,15 @@ class CustomNuScenesDataset(NuScenesDataset):
             dict: Data dictionary of the corresponding index.
         """
         if self.test_mode:
-            return self.prepare_test_data(idx)
+            data = self.prepare_test_data(idx)
+            numpy_data = self.convert_data_to_numpy_test(data)
+            return numpy_data
         while True:
 
             data = self.prepare_train_data(idx)
             if data is None:
                 idx = self._rand_another(idx)
                 continue
-
             numpy_data = self.convert_data_to_numpy(data)
             return numpy_data
 

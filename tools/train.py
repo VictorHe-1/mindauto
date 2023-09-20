@@ -39,7 +39,7 @@ logger = logging.getLogger("mindauto.train")
 
 def main(cfg):
     # init env
-    ms.set_context(mode=cfg.system.mode, device_id=0)
+    ms.set_context(mode=cfg.system.mode, device_id=0, pynative_synchronize=True)
     if cfg.system.distribute:
         init()
         device_num = get_group_size()
@@ -83,7 +83,7 @@ def main(cfg):
 
     set_seed(cfg.system.seed)
     # create dataset
-    loader_train = build_dataset(
+    _, loader_train = build_dataset(
         cfg.train.dataset,
         cfg.train.loader,
         num_shards=device_num,
@@ -161,7 +161,7 @@ def main(cfg):
         meta_data_indices=cfg.eval.dataset.pop("meta_data_column_index", None),
         val_interval=cfg.system.get("val_interval", 1),
         val_start_epoch=cfg.system.get("val_start_epoch", 1),
-        log_interval=cfg.system.get("log_interval", 100),
+        log_interval=cfg.system.get("log_interval", 1),
         ckpt_save_policy=cfg.system.get("ckpt_save_policy", "top_k"),
         ckpt_max_keep=cfg.system.get("ckpt_max_keep", 10),
         start_epoch=start_epoch,
@@ -207,7 +207,8 @@ def main(cfg):
         f"{info_seg}\n"
         f"\nStart training... (The first epoch takes longer, please wait...)\n"
     )
-
+    # loader_iter = iter(loader_train)
+    # item = next(loader_iter)
     # training
     model = ms.Model(train_net)
     model.train(

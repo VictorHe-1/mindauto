@@ -20,6 +20,13 @@ def create_parser():
         help="Options to change yaml configuration values, "
         "e.g. `-o system.distribute=False eval.dataset.dataset_root=/my_path/to/ocr_data`",
     )
+    parser.add_argument(
+        "--eval",
+        type=str,
+        nargs="+",
+        help='evaluation metrics, which depends on the dataset, e.g., "bbox",'
+             ' "segm", "proposal" for COCO, and "mAP", "recall" for PASCAL VOC',
+    )
 
     return parser
 

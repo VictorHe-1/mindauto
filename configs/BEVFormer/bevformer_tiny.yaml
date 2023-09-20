@@ -6,6 +6,7 @@ system:
   val_while_train: False
   drop_overflow_update: False
   device_id: 1
+  log_interval: 1
 
 dim: &dim 256
 pos_dim: &pos_dim 128
@@ -226,7 +227,7 @@ train: #  ema: True
     num_workers: 1
 
 eval:
-  ckpt_load_path: 'tmp_det/best.ckpt'
+  ckpt_load_path: 'ckpts/bevformer_tiny.ckpt'
   dataset_sink_mode: False
   dataset:
     type: *dataset_type
@@ -235,29 +236,25 @@ eval:
     pipeline:
       - LoadMultiViewImageFromFiles:
           to_float32: True
-      - PhotoMetricDistortionMultiViewImage:
-      - LoadAnnotations3D:
-          with_bbox_3d: True
-          with_label_3d: True
-          with_attr_label: False
-      - ObjectRangeFilter:
-          point_cloud_range: *point_cloud_range
-      - ObjectNameFilter:
-          classes: *class_names
       - NormalizeMultiviewImage: *img_norm_cfg
-      - RandomScaleImageMultiViewImage:
-          scales: [ 0.5 ]
-      - PadMultiViewImage:
-          size_divisor: 32
-      - DefaultFormatBundle3D:
-          class_names: *class_names
-      - CustomCollect3D:
-          keys: [ 'gt_bboxes_3d', 'gt_labels_3d', 'img' ]
+      - MultiScaleFlipAug3D:
+          img_scale: (1600, 900)
+          pts_scale_ratio: 1
+          flip: False
+          transforms:
+            - RandomScaleImageMultiViewImage:
+                scales: [ 0.5 ]
+            - PadMultiViewImage:
+                size_divisor: 32
+            - DefaultFormatBundle3D:
+                class_names: *class_names
+                with_label: False
+            - CustomCollect3D:
+                keys: [ 'img' ]
     #  the order of the dataloader list, matching the network input and the labels for evaluation
-    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d','img' ]
+    output_columns: [ 'img_metas', 'img' ]
     #    net_input_column_index: [ 0 ]
     #    label_column_index: [ 1, 2]  # input indices marked as label
-    train_queue_length: *queue_length
     bev_size: *bev_size
     classes: *class_names
     modality: *input_modality
@@ -267,22 +264,3 @@ eval:
     batch_size: 1
     drop_remainder: False
     num_workers: 1
-
-test_pipeline:
-  - LoadMultiViewImageFromFiles:
-      to_float32: True
-  - NormalizeMultiviewImage: *img_norm_cfg
-  - MultiScaleFlipAug3D:
-      img_scale: (1600, 900)
-      pts_scale_ratio: 1
-      flip: False
-      transforms:
-        - RandomScaleImageMultiViewImage:
-            scales: [ 0.5 ]
-        - PadMultiViewImage:
-            size_divisor: 32
-        - DefaultFormatBundle3D:
-            class_names: *class_names
-            with_label: False
-        - CustomCollect3D:
-            keys: [ 'img' ]
