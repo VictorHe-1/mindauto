@@ -250,7 +250,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             dict: Dictionary of evaluation details.
         """
         from nuscenes import NuScenes
-        self.nusc = NuScenes(version=self.version, dataroot=self.data_root,
+        self.nusc = NuScenes(version=self.version, dataroot=osp.join(self.data_root, 'nuscenes'),
                              verbose=True)
 
         output_dir = osp.join(*osp.split(result_path)[:-1])

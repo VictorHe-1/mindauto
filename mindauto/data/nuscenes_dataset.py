@@ -365,6 +365,15 @@ class NuScenesDataset(Custom3DDataset):
         common.mkdir_or_exist(jsonfile_prefix)
         res_path = osp.join(jsonfile_prefix, 'results_nusc.json')
         print('Results writes to', res_path)
+        for key in nusc_submissions['results'].keys():
+            if isinstance(nusc_submissions['results'][key], list):  # List[dict]
+                for i, sub_dict in enumerate(nusc_submissions['results'][key]):
+                    velocity_list = sub_dict['velocity']
+                    velocity_list = [item.asnumpy().item() for item in velocity_list]
+                    sub_dict['velocity'] = velocity_list
+                    nusc_submissions['results'][key][i] = sub_dict
+            else:
+                print(f"nusc_submissions['results'][{key}] is not list!")
         common.dump(nusc_submissions, res_path)
         return res_path
 
@@ -389,7 +398,7 @@ class NuScenesDataset(Custom3DDataset):
 
         output_dir = osp.join(*osp.split(result_path)[:-1])
         nusc = NuScenes(
-            version=self.version, dataroot=self.data_root, verbose=False)
+            version=self.version, dataroot=osp.join(self.data_root, 'nuscenes'), verbose=False)
         eval_set_map = {
             'v1.0-mini': 'mini_val',
             'v1.0-trainval': 'val',

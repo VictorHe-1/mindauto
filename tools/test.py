@@ -16,7 +16,7 @@ from mindauto.utils.seed import set_seed
 from mindauto.data import build_dataset
 from mindauto.models import build_model
 
-logger = logging.getLogger("mindauto.train")
+logger = logging.getLogger("mindauto.test")
 
 
 def main(cfg):
@@ -33,14 +33,14 @@ def main(cfg):
     )
     if "DEVICE_ID" in os.environ:
         logger.info(
-            f"Standalone training. Device id: {os.environ.get('DEVICE_ID')}, "
+            f"Standalone testing. Device id: {os.environ.get('DEVICE_ID')}, "
             f"specified by environment variable 'DEVICE_ID'."
         )
     else:
         device_id = cfg.system.get("device_id", 0)
         ms.set_context(device_id=device_id)
         logger.info(
-            f"Standalone training. Device id: {device_id}, "
+            f"Standalone testing. Device id: {device_id}, "
             f"specified by system.device_id in yaml config file or is default value 0."
         )
 
@@ -65,7 +65,7 @@ def main(cfg):
     data_iterator = loader.create_tuple_iterator(output_numpy=False, do_copy=False)
     for in_data in tqdm(data_iterator, total=num_batches):
         output = network(*in_data)
-        outputs.append(output)
+        outputs.append(output[0])
     kwargs = {}
     kwargs['jsonfile_prefix'] = osp.join('test', args.config.split(
         '/')[-1].split('.')[-2], time.ctime().replace(' ', '_').replace(':', '_'))
