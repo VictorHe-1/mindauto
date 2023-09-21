@@ -1,5 +1,11 @@
 from mindspore import ops
 
+'''
+TODO: If using ms.GRAPH_MODE,
+please comment out this line: value_spatial_shapes = value_spatial_shapes.tolist()
+And before constructing, convert value_spatial_shapes to a list using value_spatial_shapes.tolist().
+'''
+
 
 def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
                                         sampling_locations, attention_weights):
@@ -24,7 +30,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     """
 
     bs, _, num_heads, embed_dims = value.shape
-    _, num_queries, num_heads, num_levels, num_points, _ =\
+    _, num_queries, num_heads, num_levels, num_points, _ = \
         sampling_locations.shape
     value_spatial_shapes = value_spatial_shapes.tolist()
     value_list = value.split([H_ * W_ for H_, W_ in value_spatial_shapes],
@@ -42,7 +48,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
         # bs, num_heads, num_queries, num_points, 2 ->
         # bs*num_heads, num_queries, num_points, 2
         sampling_grid_l_ = ops.flatten(ops.swapaxes(sampling_grids[:, :, :,
-                                          level], 1, 2), start_dim=0, end_dim=1)
+                                                    level], 1, 2), start_dim=0, end_dim=1)
         # bs*num_heads, embed_dims, num_queries, num_points
         sampling_value_l_ = ops.grid_sample(
             value_l_,
@@ -58,6 +64,6 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
         bs * num_heads, 1, num_queries, num_levels * num_points)
 
     output = ops.sum(ops.flatten(ops.stack(sampling_value_list, axis=-2), start_dim=-2) *
-              attention_weights, -1).view(bs, num_heads * embed_dims,
-                                              num_queries)
+                     attention_weights, -1).view(bs, num_heads * embed_dims,
+                                                 num_queries)
     return ops.swapaxes(output, 1, 2)
