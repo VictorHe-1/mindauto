@@ -480,9 +480,7 @@ class BEVFormerHead(DETRHead):
         Returns:
             list[dict]: Decoded bbox, scores and labels after nms.
         """
-
         preds_dicts = self.bbox_coder.decode(preds_dicts)
-
         num_samples = len(preds_dicts)
         ret_list = []
         for i in range(num_samples):

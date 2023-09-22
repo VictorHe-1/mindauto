@@ -158,7 +158,6 @@ class BEVFormer(MVXTwoStageDetector):
             return None
         if self.with_img_neck:
             img_feats = self.img_neck(img_feats)
-
         img_feats_reshaped = []
         for img_feat in img_feats:
             BN, C, H, W = img_feat.shape
@@ -356,7 +355,6 @@ class BEVFormer(MVXTwoStageDetector):
     def simple_test(self, img_metas, img=None, prev_bev=None, rescale=False):
         """Test function without augmentaiton."""
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
-
         bbox_list = [dict() for i in range(len(img_metas))]
         new_prev_bev, bbox_pts = self.simple_test_pts(
             img_feats, img_metas, prev_bev, rescale=rescale)

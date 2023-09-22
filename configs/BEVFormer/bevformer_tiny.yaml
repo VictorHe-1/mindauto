@@ -67,6 +67,7 @@ model:
       requires_grad: False
     norm_eval: True
     style: pytorch
+    training_mode: False # set it to True when training
   img_neck:
     type: FPN
     in_channels: [2048]

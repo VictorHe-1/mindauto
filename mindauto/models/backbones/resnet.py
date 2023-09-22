@@ -117,7 +117,8 @@ class Bottleneck(nn.Cell):
                  norm_cfg=dict(type='BN'),
                  dcn=None,
                  plugins=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 training_mode=True):
         """Bottleneck block for ResNet.
 
         If style is "pytorch", the stride-two layer is the 3x3 conv layer, if
@@ -130,7 +131,7 @@ class Bottleneck(nn.Cell):
         if plugins is not None:
             allowed_position = ['after_conv1', 'after_conv2', 'after_conv3']
             assert all(p['position'] in allowed_position for p in plugins)
-
+        self.training_mode = training_mode
         self.inplanes = inplanes
         self.planes = planes
         self.stride = stride
@@ -154,10 +155,11 @@ class Bottleneck(nn.Cell):
         else:
             self.conv1_stride = stride
             self.conv2_stride = 1
+
         if norm_cfg['type'] == 'BN':
-            self.norm1 = nn.BatchNorm2d(num_features=planes)
-            self.norm2 = nn.BatchNorm2d(num_features=planes)
-            self.norm3 = nn.BatchNorm2d(num_features=planes * self.expansion)
+            self.norm1 = nn.BatchNorm2d(num_features=planes, use_batch_statistics=self.training_mode)
+            self.norm2 = nn.BatchNorm2d(num_features=planes, use_batch_statistics=self.training_mode)
+            self.norm3 = nn.BatchNorm2d(num_features=planes * self.expansion, use_batch_statistics=self.training_mode)
 
         self.conv1 = nn.Conv2d(
             in_channels=inplanes,
@@ -283,8 +285,10 @@ class ResNet(nn.Cell):
                  with_cp=False,
                  zero_init_residual=True,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 training_mode=True):
         super(ResNet, self).__init__()
+        self.training_mode = training_mode
         self.zero_init_residual = zero_init_residual
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
@@ -368,16 +372,18 @@ class ResNet(nn.Cell):
                 norm_cfg=norm_cfg,
                 dcn=dcn,
                 plugins=stage_plugins,
-                init_cfg=block_init_cfg)
+                init_cfg=block_init_cfg,
+                training_mode=training_mode
+            )
             self.inplanes = planes * self.block.expansion
             layer_name = f'layer{i + 1}'
             setattr(self, layer_name, res_layer)
             self.res_layers.append(layer_name)
 
         self._freeze_stages()  #TODO
-
         self.feat_dim = self.block.expansion * base_channels * 2 ** (
                 len(self.stage_blocks) - 1)
+        self.train(mode=training_mode)
 
     def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``."""
@@ -425,7 +431,7 @@ class ResNet(nn.Cell):
                 padding=3,
                 has_bias=False,
                 pad_mode='pad')
-            self.norm1 = nn.BatchNorm2d(stem_channels)
+            self.norm1 = nn.BatchNorm2d(stem_channels, use_batch_statistics=self.training_mode)
             self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, pad_mode='pad')
 
@@ -447,9 +453,8 @@ class ResNet(nn.Cell):
             for param in m.trainable_params():
                 param.requires_grad = False
 
-    def construct(self, x, mode=True):
+    def construct(self, x):
         """Forward function."""
-        self.train(mode)
         if self.deep_stem:
             x = self.stem(x)
         else:

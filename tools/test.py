@@ -59,6 +59,7 @@ def main(cfg):
                           amp_level=amp_level)  # TODO: Load Model
     ms.load_checkpoint(cfg.eval.ckpt_load_path, network)
     network.set_train(False)
+    network.img_backbone.train(False)
 
     outputs = []
     num_batches = loader.get_dataset_size()

@@ -46,9 +46,8 @@ class NMSFreeCoder(BaseBBoxCoder):
             list[dict]: Decoded boxes.
         """
         max_num = self.max_num
-
         cls_scores = cls_scores.sigmoid()
-        scores, indexs = cls_scores.view(-1).topk(max_num)
+        scores, indexs = cls_scores.view(-1).topk(max_num)  # big difference
         labels = indexs % self.num_classes
         bbox_index = indexs // self.num_classes
         bbox_preds = bbox_preds[bbox_index]
