@@ -201,6 +201,9 @@ train: #  ema: True
           point_cloud_range: *point_cloud_range
       - ObjectNameFilter:
           classes: *class_names
+      - PadLabel:
+          padding_size: 350
+          padding_value: -1
       - NormalizeMultiviewImage: *img_norm_cfg
       - RandomScaleImageMultiViewImage:
           scales: [0.5]

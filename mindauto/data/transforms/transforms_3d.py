@@ -195,6 +195,56 @@ class ObjectNameFilter:
         return repr_str
 
 
+class PadLabel:
+    """
+    pad gt_labels_3d to padding_size
+    pad gt_bboxes_3d to padding_size
+    """
+
+    def __init__(self, padding_size, padding_value=-1):
+        self.padding_size = padding_size
+        self.padding_value = padding_value
+
+    def __call__(self, input_dict):
+        """Call function to filter objects by their names.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after filtering, 'gt_bboxes_3d', 'gt_labels_3d' \
+                keys are updated in the result dict.
+        """
+        gt_labels_3d = input_dict['gt_labels_3d']
+        gt_labels_3d_pad = np.full((self.padding_size, ), self.padding_value, dtype=np.float32)
+        gt_bboxes_input = input_dict['gt_bboxes_3d'].input_tensor
+        bboxes_pad = np.full((self.padding_size, 9), self.padding_value, dtype=np.float32)
+        gt_len = len(gt_labels_3d)
+        if self.padding_value in gt_labels_3d:
+            raise ValueError(f"Padding value {self.padding_value} in gt_labels_3d {gt_labels_3d}")
+        if gt_len:
+            gt_labels_3d_pad[:min(gt_len, self.padding_size)] = gt_labels_3d[:min(gt_len, self.padding_size)]
+            bboxes_pad[:min(gt_len, self.padding_size)] = gt_bboxes_input[:min(gt_len, self.padding_size)]
+        if gt_len > self.padding_size:
+            warnings.warn(f"Gt len {gt_len} > padding size {self.padding_size}")
+        input_dict['gt_labels_3d'] = gt_labels_3d_pad
+        box_dim = input_dict['gt_bboxes_3d'].input_box_dim
+        with_yaw = input_dict['gt_bboxes_3d'].input_with_yaw
+        input_origin = input_dict['gt_bboxes_3d'].input_origin
+        input_dict['gt_bboxes_3d'] = LiDARInstance3DBoxes(bboxes_pad,
+                                                          box_dim=box_dim,
+                                                          with_yaw=with_yaw,
+                                                          origin=input_origin,
+                                                          numpy_boxes=True)
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(classes={self.classes})'
+        return repr_str
+
+
 class NormalizeMultiviewImage:
     """Normalize the image.
     Added key is "img_norm_cfg".
