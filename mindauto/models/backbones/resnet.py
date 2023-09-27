@@ -53,8 +53,10 @@ class ResLayer(nn.SequentialCell):
                     out_channels=planes * block.expansion,
                     kernel_size=1,
                     stride=conv_stride,
-                    has_bias=False),
-                nn.BatchNorm2d(num_features=planes * block.expansion)
+                    has_bias=False,
+                    pad_mode='valid'),
+                nn.BatchNorm2d(num_features=planes * block.expansion,
+                               use_batch_statistics=kwargs['training_mode'])
             ])
             downsample = nn.SequentialCell(*downsample)
 
@@ -166,7 +168,8 @@ class Bottleneck(nn.Cell):
             out_channels=planes,
             kernel_size=1,
             stride=self.conv1_stride,
-            has_bias=False)
+            has_bias=False,
+            pad_mode='valid')
         fallback_on_stride = False
         if self.with_dcn:
             pass
@@ -187,7 +190,8 @@ class Bottleneck(nn.Cell):
             in_channels=planes,
             out_channels=planes * self.expansion,
             kernel_size=1,
-            has_bias=False)
+            has_bias=False,
+            pad_mode='valid')
 
         self.relu = nn.ReLU()
         self.downsample = downsample
@@ -195,20 +199,16 @@ class Bottleneck(nn.Cell):
     def construct(self, x):
         """Forward function."""
         identity = x
-        out = self.conv1(x)
+        out = self.conv1(x)  # 0.002 fp16
         out = self.norm1(out)
         out = self.relu(out)
-
         out = self.conv2(out)
         out = self.norm2(out)
         out = self.relu(out)
-
         out = self.conv3(out)
         out = self.norm3(out)
-
         if self.downsample is not None:
             identity = self.downsample(x)
-
         out += identity
 
         out = self.relu(out)
@@ -458,10 +458,10 @@ class ResNet(nn.Cell):
         if self.deep_stem:
             x = self.stem(x)
         else:
-            x = self.conv1(x)
-            x = self.norm1(x)
-            x = self.relu(x)
-        x = self.maxpool(x)
+            x = self.conv1(x)  # abs_diff 0.02
+            x = self.norm1(x)  # abs_diff 0.0007
+            x = self.relu(x)  # abs_diff 0.06
+        x = self.maxpool(x)  # abs_diff 0.007
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

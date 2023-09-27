@@ -107,7 +107,8 @@ class FPN(nn.Cell):
                 conv_cfg=conv_cfg,
                 norm_cfg=norm_cfg if not self.no_norm_on_lateral else None,
                 act_cfg=act_cfg,
-                inplace=False)
+                inplace=False,
+                padding_mode='valid')
             fpn_conv = ConvModule(
                 out_channels,
                 out_channels,
