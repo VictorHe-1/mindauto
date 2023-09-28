@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 from os import path as osp
 import pycocotools.mask as maskUtils
@@ -40,7 +39,7 @@ class LoadMultiViewImageFromFiles:
         filename = results['img_filename']
         # img is of shape (h, w, c, num_views)
         img = np.stack(
-            [cv2.imread(name) for name in filename], axis=-1)
+            [common.imread(name) for name in filename], axis=-1)
         if self.to_float32:
             img = img.astype(np.float32)
         results['filename'] = filename

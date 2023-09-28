@@ -1,5 +1,5 @@
-import numpy as np
 import mindspore as ms
+from mindspore import ops
 from mindauto.core.bbox.util import denormalize_bbox
 from .base_bbox_coder import BaseBBoxCoder
 
@@ -41,21 +41,21 @@ class NMSFreeCoder(BaseBBoxCoder):
                 cls_out_channels should includes background.
             bbox_preds (Tensor): Outputs from the regression \
                 head with normalized coordinate format (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy). \
-                Shape [num_query, 9].
+                Shape [num_query, 10].
         Returns:
             list[dict]: Decoded boxes.
         """
         max_num = self.max_num
         cls_scores = cls_scores.sigmoid()
-        scores, indexs = cls_scores.view(-1).topk(max_num)  # big difference
+        topk = ops.TopK(sorted=True)
+        topk.set_device(device_target='CPU')
+        scores, indexs = topk(cls_scores.view(-1), max_num)
         labels = indexs % self.num_classes
         bbox_index = indexs // self.num_classes
         bbox_preds = bbox_preds[bbox_index]
-
         final_box_preds = denormalize_bbox(bbox_preds, self.pc_range)
-        final_scores = scores
+        final_scores = scores  # 0.002
         final_preds = labels
-
         # use score threshold
         if self.score_threshold is not None:
             thresh_mask = final_scores > self.score_threshold
@@ -68,24 +68,24 @@ class NMSFreeCoder(BaseBBoxCoder):
                 thresh_mask = final_scores >= tmp_score
 
         if self.post_center_range is not None:
-            numpy_box_preds = final_box_preds.asnumpy()
-            numpy_scores = final_scores.asnumpy()
-            numpy_preds = final_preds.asnumpy()
-            mask = np.all(numpy_box_preds[..., :3] >= self.post_center_range[:3], axis=1)
-            mask &= np.all(numpy_box_preds[..., :3] <= self.post_center_range[3:], axis=1)
+            if not isinstance(self.post_center_range, ms.Tensor):
+                self.post_center_range = ms.Tensor(self.post_center_range, dtype=ms.float32)
 
+            mask = ops.all(final_box_preds[..., :3] >= self.post_center_range[:3], axis=1).astype(ms.int16)
+            mask2 = ops.all(final_box_preds[..., :3] <= self.post_center_range[3:], axis=1).astype(ms.int16)
+            mask = ops.bitwise_and(mask, mask2)
             if self.score_threshold:
                 mask &= thresh_mask
-            boxes3d = numpy_box_preds[mask]
-            scores = numpy_scores[mask]
+            bool_mask = mask.bool()
+            boxes3d = final_box_preds[bool_mask]
+            scores = final_scores[bool_mask]
 
-            labels = numpy_preds[mask]
+            labels = final_preds[bool_mask]
             predictions_dict = {
-                'bboxes': ms.Tensor(boxes3d, dtype=ms.float32),
-                'scores': ms.Tensor(scores, dtype=ms.float32),
-                'labels': ms.Tensor(labels, dtype=ms.int32)
+                'bboxes': boxes3d,
+                'scores': scores,
+                'labels': labels
             }
-
         else:
             raise NotImplementedError(
                 'Need to reorganize output as a batch, only '
