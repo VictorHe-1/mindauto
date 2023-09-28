@@ -2,7 +2,7 @@ system:
   mode: 1 # 0 for graph mode, 1 for pynative mode in MindSpore
   distribute: False
   amp_level: 'O0'
-  seed: 42
+  seed: 0 # BEVFormer seed is 0
   val_while_train: False
   drop_overflow_update: False
   device_id: 1
