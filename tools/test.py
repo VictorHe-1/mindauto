@@ -20,7 +20,7 @@ logger = logging.getLogger("mindauto.test")
 
 
 def main(cfg):
-    ms.set_context(mode=cfg.system.mode, device_id=0)
+    ms.set_context(mode=cfg.system.mode, device_id=0, pynative_synchronize=True)
     device_num = None
     rank_id = None
 
@@ -55,9 +55,9 @@ def main(cfg):
         refine_batch_size=True,
     )
     amp_level = cfg.system.get("amp_level", "O0")
-    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None),
-                          amp_level=amp_level)  # TODO: Load Model
-    ms.load_checkpoint(cfg.eval.ckpt_load_path, network)
+    network = build_model(cfg.model, ckpt_load_path=cfg.eval.ckpt_load_path,
+                          amp_level=amp_level)
+    # ms.load_checkpoint(cfg.eval.ckpt_load_path, network)
     network.set_train(False)
     network.img_backbone.train(False)
 

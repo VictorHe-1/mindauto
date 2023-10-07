@@ -1,3 +1,4 @@
+import mindspore as ms
 from mindspore.amp import auto_mixed_precision
 
 from .backbones import build_backbone
@@ -16,15 +17,7 @@ def build_model(cfg, **kwargs):
     args.pop('type')
     model = obj_cls(**args)
     if "ckpt_load_path" in kwargs:
-        load_from = kwargs["ckpt_load_path"]
-        if isinstance(load_from, bool):
-            raise ValueError(
-                "Cannot find the pretrained checkpoint for a customized model without giving the url or local path "
-                "to the checkpoint.\nPlease specify the url or local path by setting `model-pretrained` (if training) "
-                "or `eval-ckpt_load_path` (if evaluation) in the yaml config"
-            )
-
-        # load_model(model, load_from) TODO: load_model
+        ms.load_checkpoint(kwargs['ckpt_load_path'], model)
 
     if 'amp_level' in kwargs:
         auto_mixed_precision(model, amp_level=kwargs["amp_level"])
