@@ -496,13 +496,13 @@ class PerceptionTransformer(nn.Cell):
         return bev_embed
 
     def construct(self,
-                  mlvl_feats,
-                  bev_queries,
-                  object_query_embed,
+                  mlvl_feats,  # big difference
+                  bev_queries,  # No diff
+                  object_query_embed,  # No diff
                   bev_h,
                   bev_w,
-                  grid_length=[0.512, 0.512],
-                  bev_pos=None,
+                  grid_length=[0.512, 0.512],  # No diff
+                  bev_pos=None,  # No Diff
                   reg_branches=None,
                   cls_branches=None,
                   prev_bev=None,

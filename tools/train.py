@@ -39,7 +39,7 @@ logger = logging.getLogger("mindauto.train")
 
 def main(cfg):
     # init env
-    ms.set_context(mode=cfg.system.mode, device_id=0, pynative_synchronize=True)
+    ms.set_context(mode=cfg.system.mode, device_id=0, device_target='Ascend')
     if cfg.system.distribute:
         init()
         device_num = get_group_size()

@@ -138,12 +138,6 @@ class BEVFormer(MVXTwoStageDetector):
         """Extract features of images."""
         B = img.shape[0]
         if img is not None:
-
-            # input_shape = img.shape[-2:]
-            # # update real input shape of each single img
-            # for img_meta in img_metas:
-            #     img_meta.update(input_shape=input_shape)
-
             if img.ndim == 5 and img.shape[0] == 1:
                 img = ops.squeeze(img)
             elif img.ndim == 5 and img.shape[0] > 1:
@@ -151,13 +145,13 @@ class BEVFormer(MVXTwoStageDetector):
                 img = img.reshape(B * N, C, H, W)
             if self.use_grid_mask:
                 img = self.grid_mask(img)
-            img_feats = self.img_backbone(img)
+            img_feats = self.img_backbone(img)  # mean abs diff 0.02
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
         else:
             return None
         if self.with_img_neck:
-            img_feats = self.img_neck(img_feats)
+            img_feats = self.img_neck(img_feats)  # mean abs diff 0.015
         img_feats_reshaped = []
         for img_feat in img_feats:
             BN, C, H, W = img_feat.shape
@@ -284,12 +278,10 @@ class BEVFormer(MVXTwoStageDetector):
         Returns:
             dict: Losses of different branches.
         """
-
-        len_queue = img.shape[1]
+        len_queue = img.shape[1]  # len_queue = 3
         prev_img = img[:, :-1, ...]
         img = img[:, -1, ...]
-
-        prev_img_metas = copy.deepcopy(img_metas)
+        prev_img_metas = copy.deepcopy(img_metas)  # List[Dict{0: {}, 1: {}, 2: {}}] item numpy.ndarray
         prev_bev = self.obtain_history_bev(prev_img, prev_img_metas)
 
         img_metas = [each[len_queue - 1] for each in img_metas]

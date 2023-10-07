@@ -168,6 +168,10 @@ class BEVFormerHead(DETRHead):
                 img_metas=img_metas,
                 prev_bev=prev_bev
             )
+        # init reference no diff
+        # inter_references abs diff: 0.001
+        # hs abs big diff: 0.04 median: 0.01
+        # bev_embed big diff: 0.01  median: 0.01
         bev_embed, hs, init_reference, inter_references = outputs
         hs = hs.permute(0, 2, 1, 3)
         outputs_classes = []
@@ -180,7 +184,6 @@ class BEVFormerHead(DETRHead):
             reference = inverse_sigmoid(reference)
             outputs_class = self.cls_branches[lvl](hs[lvl])
             tmp = self.reg_branches[lvl](hs[lvl])
-
             # TODO: check the shape of reference
             assert reference.shape[-1] == 3
             tmp[..., 0:2] += reference[..., 0:2]
@@ -480,6 +483,7 @@ class BEVFormerHead(DETRHead):
         Returns:
             list[dict]: Decoded bbox, scores and labels after nms.
         """
+        # breakpoint()
         preds_dicts = self.bbox_coder.decode(preds_dicts)
         num_samples = len(preds_dicts)
         ret_list = []
