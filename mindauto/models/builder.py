@@ -16,7 +16,7 @@ def build_model(cfg, **kwargs):
     args = cfg.copy()
     args.pop('type')
     model = obj_cls(**args)
-    if "ckpt_load_path" in kwargs:
+    if kwargs['ckpt_load_path'] is not None:
         ms.load_checkpoint(kwargs['ckpt_load_path'], model)
 
     if 'amp_level' in kwargs:

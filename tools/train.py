@@ -75,7 +75,7 @@ def main(cfg):
             )
         else:
             device_id = cfg.system.get("device_id", 0)
-            ms.set_context(device_id=device_id)
+            ms.set_context(mode=cfg.system.mode, device_id=device_id, device_target='Ascend')
             logger.info(
                 f"Standalone training. Device id: {device_id}, "
                 f"specified by system.device_id in yaml config file or is default value 0."
