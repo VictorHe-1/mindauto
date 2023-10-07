@@ -192,6 +192,8 @@ class CustomNuScenesDataset(NuScenesDataset):
         for key in ordered_key:
             if data[key].dtype == np.float64:
                 data[key] = data[key].astype(np.float32)
+            if data[key].dtype == np.int64:
+                data[key] = data[key].astype(np.int32)
             numpy_data.append(data[key])
         numpy_data.append(np.array(ordered_key))
         return tuple(numpy_data)
