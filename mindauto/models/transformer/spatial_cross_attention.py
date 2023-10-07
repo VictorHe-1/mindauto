@@ -145,7 +145,7 @@ class MSDeformableAttention3D(nn.Cell):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-
+        sampling_locations = None
         if value is None:
             value = query
         if identity is None:
@@ -315,6 +315,8 @@ class SpatialCrossAttention(nn.Cell):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
+        inp_residual = None
+        slots = None
 
         if key is None:
             key = query
