@@ -1,3 +1,4 @@
+from addict import Dict
 import mindspore as ms
 from mindspore.amp import auto_mixed_precision
 
@@ -11,10 +12,21 @@ model_types = {
 }
 
 
+def convert_to_standard_dict(addict_dict):
+    standard_dict = {}
+    for key, value in addict_dict.items():
+        if isinstance(value, Dict):
+            standard_dict[key] = convert_to_standard_dict(value)
+        else:
+            standard_dict[key] = value
+    return standard_dict
+
+
 def build_model(cfg, **kwargs):
     obj_cls = model_types.get(cfg['type'])
     args = cfg.copy()
     args.pop('type')
+    args = convert_to_standard_dict(args)
     model = obj_cls(**args)
     if kwargs['ckpt_load_path'] is not None:
         ms.load_checkpoint(kwargs['ckpt_load_path'], model)

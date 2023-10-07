@@ -1,5 +1,5 @@
 system:
-  mode: 1 # 0 for graph mode, 1 for pynative mode in MindSpore
+  mode: 0 # 0 for graph mode, 1 for pynative mode in MindSpore
   distribute: False
   amp_level: 'O0'
   seed: 0 # BEVFormer seed is 0

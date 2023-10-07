@@ -110,11 +110,10 @@ class BEVFormerEncoder(TransformerLayerSequence):
         reference_points_cam[..., 0] /= img_metas[0]['img_shape'][0][1]
         reference_points_cam[..., 1] /= img_metas[0]['img_shape'][0][0]
 
-        bev_mask = (bev_mask & (reference_points_cam[..., 1:2] > 0.0)
-                    & (reference_points_cam[..., 1:2] < 1.0)
-                    & (reference_points_cam[..., 0:1] < 1.0)
+        bev_mask = (bev_mask & (reference_points_cam[..., 1:2] > 0.0) \
+                    & (reference_points_cam[..., 1:2] < 1.0) \
+                    & (reference_points_cam[..., 0:1] < 1.0) \
                     & (reference_points_cam[..., 0:1] > 0.0))
-
         bev_mask = np.nan_to_num(bev_mask)
 
         reference_points_cam = np.transpose(reference_points_cam, (2, 1, 3, 0, 4))

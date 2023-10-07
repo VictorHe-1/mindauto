@@ -33,11 +33,10 @@ class MVXTwoStageDetector(Base3DDetector):
                  init_cfg=None):
         # Some args here for future use
         super(MVXTwoStageDetector, self).__init__(init_cfg=init_cfg)
-        # breakpoint()
         if pts_bbox_head:
-            pts_train_cfg = train_cfg.pts if train_cfg else None
+            pts_train_cfg = train_cfg['pts'] if train_cfg else None
             pts_bbox_head.update(train_cfg=pts_train_cfg)
-            pts_test_cfg = test_cfg.pts if test_cfg else None
+            pts_test_cfg = test_cfg['pts'] if test_cfg else None
             pts_bbox_head.update(test_cfg=pts_test_cfg)
             self.pts_bbox_head = builder.build_head(pts_bbox_head)
 
