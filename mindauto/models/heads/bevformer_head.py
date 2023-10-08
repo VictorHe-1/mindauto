@@ -10,6 +10,7 @@ from mindauto.core.bbox.coders import build_bbox_coder
 from mindauto.models.transformer import inverse_sigmoid
 from mindauto.core.utils import multi_apply
 from mindauto.core.bbox.util import normalize_bbox
+from mindauto.core.bbox.structures import LiDARInstance3DBoxes
 from .detr_head import DETRHead
 from .dist_utils import reduce_mean
 
@@ -435,7 +436,7 @@ class BEVFormerHead(DETRHead):
         num_dec_layers = len(all_cls_scores)
 
         gt_bboxes_list = [ops.cat(
-            (gt_bboxes.gravity_center, gt_bboxes.tensor[:, 3:]),
+            (gt_bboxes['gravity_center'], gt_bboxes['tensor'][:, 3:]),
             axis=1) for gt_bboxes in gt_bboxes_list]
 
         all_gt_bboxes_list = [gt_bboxes_list for _ in range(num_dec_layers)]
@@ -483,7 +484,6 @@ class BEVFormerHead(DETRHead):
         Returns:
             list[dict]: Decoded bbox, scores and labels after nms.
         """
-        # breakpoint()
         preds_dicts = self.bbox_coder.decode(preds_dicts)
         num_samples = len(preds_dicts)
         ret_list = []
@@ -494,7 +494,7 @@ class BEVFormerHead(DETRHead):
             bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
 
             code_size = bboxes.shape[-1]
-            bboxes = img_metas[i]['box_type_3d'](bboxes, code_size)
+            bboxes = LiDARInstance3DBoxes(bboxes, code_size)  #img_metas[i]['box_type_3d'](bboxes, code_size)
             scores = preds['scores']
             labels = preds['labels']
 

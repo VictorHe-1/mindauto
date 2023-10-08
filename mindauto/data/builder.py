@@ -134,7 +134,7 @@ def build_dataset(
             for sub_key in ['prev_bev_exists', 'can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
                 combined_columns = 'img_metas/'+str(i) + '/' + sub_key
                 dataset_config['output_columns'].append(combined_columns)
-        dataset_config['output_columns'].extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
+        dataset_config['output_columns'].extend(['tensor', 'gravity_center'])
     else:
         dataset_config['output_columns'].pop(0)
         for sub_key in ['img_shape', 'lidar2img', 'box_type_3d', 'scene_token', 'can_bus']:

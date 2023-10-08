@@ -16,40 +16,54 @@ def split_array(array):
     return split_list
 
 
+def ms_split_array(array):
+    split_list = [item.squeeze(0) for item in array]
+    return split_list
+
+@ms.jit
 def restore_img_metas(kwargs, new_args):
     # only support batch_size = 1
     # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
     #                     'lidar2img': list, 'scene_token': str, 'box_type_3d: type}
-    type_mapping = {
-        "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": LiDARInstance3DBoxes}
-    key_list = kwargs[-1].asnumpy()[0]
+    # type_mapping = {
+    #     "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": LiDARInstance3DBoxes}
+    key_mapping = {
+        0: 'prev_bev_exists',
+        1: 'can_bus',
+        2: 'lidar2img',
+        3: 'scene_token',
+        4: 'box_type_3d',
+        5: 'img_shape'
+    }
     img_meta_dict = {}
-    for key, value in zip(key_list, kwargs[:-1]):
-        if key.startswith("img_metas"):
-            key_list = key.split("/")
-            middle_key = int(key_list[1])
-            last_key = key_list[-1]
+    for i, value in enumerate(kwargs[:-1]):
+        if i == 0:
+            new_args['gt_labels_3d'] = [value.squeeze(0)]
+        elif i == 1:
+            new_args['img'] = value
+        elif i >= 2 and i < 4:  # graph mode doesn't support 2 <= i < 4
+            continue
+        else:
+            new_i = (i - 4) % 6
+            middle_key = (i - 4) // 6
+            last_key = key_mapping[new_i]
             if middle_key not in img_meta_dict:
                 img_meta_dict[middle_key] = {}
             if last_key in ['prev_bev_exists', 'scene_token']:
-                img_meta_dict[middle_key][last_key] = value.asnumpy().item()
+                img_meta_dict[middle_key][last_key] = value
             elif last_key == 'lidar2img':
-                img_meta_dict[middle_key][last_key] = split_array(value.asnumpy()[0])
+                img_meta_dict[middle_key][last_key] = ms_split_array(ops.split(value.squeeze(0), 1))
             elif last_key == 'box_type_3d':
-                img_meta_dict[middle_key][last_key] = type_mapping[value.asnumpy().item()]
+                img_meta_dict[middle_key][last_key] = 1  # 1 represents LiDARInstance3DBoxes
             elif last_key == 'img_shape':
-                img_shape = value.asnumpy()[0]
-                img_meta_dict[middle_key][last_key] = [tuple(each) for each in img_shape]
-            else:  # can_bus
-                img_meta_dict[middle_key][last_key] = value.asnumpy()[0]
-        else:
-            if key == 'gt_labels_3d':
-                new_args[key] = [value[0].asnumpy()]
-            if key == 'img':
-                new_args[key] = value
+                img_shape = value.squeeze(0)
+                img_meta_dict[middle_key][last_key] = ms_split_array(ops.split(img_shape, 1))
+            else:  # can_bus float32
+                img_meta_dict[middle_key][last_key] = value.squeeze(0)
     new_args['img_metas'] = [img_meta_dict]
+    return new_args
 
-
+# TODO: modify for new key_list
 def restore_img_metas_for_test(kwargs, new_args):
     # only support batch_size = 1
     # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
@@ -78,14 +92,13 @@ def restore_img_metas_for_test(kwargs, new_args):
                 new_args[key] = [value.squeeze(0)]
     new_args['img_metas'] = [[img_meta_dict]]
 
-
+@ms.jit
 def restore_3d_bbox(kwargs, new_args):
-    key_list = kwargs[-1].asnumpy().tolist()[0]
-    tensor = kwargs[key_list.index('tensor')][0]
-    box_dim = kwargs[key_list.index('box_dim')].asnumpy().item()
-    with_yaw = kwargs[key_list.index('with_yaw')].asnumpy().item()
-    origin = tuple(kwargs[key_list.index('origin')].asnumpy()[0].tolist())
-    new_args['gt_bboxes_3d'] = [LiDARInstance3DBoxes(tensor, box_dim, with_yaw, origin)]
+    tensor = kwargs[2].squeeze(0)
+    gravity_center = kwargs[3].squeeze(0)
+    lidar_inst = {'gravity_center': gravity_center, 'tensor': tensor}
+    new_args['gt_bboxes_3d'] = [lidar_inst]
+    return new_args
 
 
 class BEVFormer(MVXTwoStageDetector):
@@ -213,8 +226,8 @@ class BEVFormer(MVXTwoStageDetector):
         """
         new_args = {}
         if self.training:
-            restore_img_metas(args, new_args)
-            restore_3d_bbox(args, new_args)
+            new_args = restore_img_metas(args, new_args)
+            new_args = restore_3d_bbox(args, new_args)
             return self.forward_train(**new_args)
         else:
             new_args['rescale'] = True

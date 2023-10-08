@@ -167,11 +167,9 @@ class CustomNuScenesDataset(NuScenesDataset):
         data['gt_labels_3d'] = data['gt_labels_3d'].astype(np.int32)
         # convert gt_bboxes_3d (LiDARInstance3D) to numpy array
         gt_bbox_3d = data['gt_bboxes_3d']
-        data['tensor'] = gt_bbox_3d.input_tensor
-        data['box_dim'] = np.array(gt_bbox_3d.input_box_dim)
-        data['with_yaw'] = np.array(gt_bbox_3d.with_yaw)
-        data['origin'] = np.array(gt_bbox_3d.input_origin)
-        ordered_key.extend(['tensor', 'box_dim', 'with_yaw', 'origin'])
+        data['tensor'] = gt_bbox_3d.tensor
+        data['gravity_center'] = gt_bbox_3d.gravity_center
+        ordered_key.extend(['tensor', 'gravity_center'])
         data.pop('gt_bboxes_3d')
         queue_length = 0
         for key, value in data['img_metas'].items():
