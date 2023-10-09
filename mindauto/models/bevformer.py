@@ -20,7 +20,7 @@ def ms_split_array(array):
     split_list = [item.squeeze(0) for item in array]
     return split_list
 
-@ms.jit
+
 def restore_img_metas(kwargs):
     # only support batch_size = 1
     # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
@@ -58,6 +58,7 @@ def restore_img_metas(kwargs):
                 img_meta_dict[middle_key][last_key] = value.squeeze(0)
     return img_meta_dict
 
+
 # TODO: modify for new key_list
 def restore_img_metas_for_test(kwargs, new_args):
     # only support batch_size = 1
@@ -86,6 +87,7 @@ def restore_img_metas_for_test(kwargs, new_args):
             if key == 'img':
                 new_args[key] = [value.squeeze(0)]
     new_args['img_metas'] = [[img_meta_dict]]
+
 
 @ms.jit
 def restore_3d_bbox(kwargs):
