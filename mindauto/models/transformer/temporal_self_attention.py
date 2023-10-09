@@ -199,9 +199,8 @@ class TemporalSelfAttention(nn.Cell):
         sampling_offsets = sampling_offsets.permute(0, 3, 1, 2, 4, 5, 6) \
             .reshape(bs * self.num_bev_queue, num_query, self.num_heads, self.num_levels, self.num_points, 2)
         if reference_points.shape[-1] == 2:
-            offset_normalizer = np.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1)
-            offset_normalizer = ms.Tensor(offset_normalizer, dtype=ms.float32)
+            offset_normalizer = ops.stack(
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
             sampling_locations = reference_points[:, :, None, :, None, :] \
                                  + sampling_offsets \
                                  / offset_normalizer[None, None, None, :, None, :]
