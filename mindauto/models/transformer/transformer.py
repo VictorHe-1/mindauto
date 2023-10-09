@@ -456,7 +456,7 @@ class PerceptionTransformer(nn.Cell):
                     prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))
 
         # add can bus signals
-        can_bus = ms.Tensor([each['can_bus'] for each in kwargs['img_metas']], dtype=bev_queries.dtype)
+        can_bus = ops.stack([each['can_bus'] for each in kwargs['img_metas']], 0)
         can_bus = self.can_bus_mlp(can_bus)[None, :, :]
         bev_queries = bev_queries + can_bus * self.use_can_bus
 
@@ -474,10 +474,9 @@ class PerceptionTransformer(nn.Cell):
             feat_flatten.append(feat)
 
         feat_flatten = ops.cat(feat_flatten, 2)
-        spatial_shapes = ms.Tensor(spatial_shapes, dtype=ms.float32)
+        spatial_shapes = ms.Tensor(spatial_shapes, dtype=ms.int32)
         level_start_index = ops.cat((spatial_shapes.new_zeros(
-            (1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
-
+            (1,)), spatial_shapes.prod(1).astype(ms.int32).cumsum(0)[:-1].astype(ms.int32)))
         feat_flatten = feat_flatten.permute(
             0, 2, 1, 3)  # (num_cam, H*W, bs, embed_dims)
         bev_embed = self.encoder(
