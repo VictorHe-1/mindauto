@@ -2,12 +2,88 @@ import copy
 from os import path as osp
 import numpy as np
 import random
+from PIL import Image
 from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 
 import common
 from .nuscenes_eval import NuScenesEval_custom
 from .nuscenes_dataset import NuScenesDataset
 from .transforms.transforms_factory import run_transforms
+
+
+class GridMask:
+    def __init__(self,
+                 use_h,
+                 use_w,
+                 rotate=1,
+                 offset=False,
+                 ratio=0.5,
+                 mode=0,
+                 prob=1.,
+                 training=True):
+        self.use_h = use_h
+        self.use_w = use_w
+        self.rotate = rotate
+        self.offset = offset
+        self.ratio = ratio
+        self.mode = mode
+        self.st_prob = prob
+        self.prob = prob
+        self.fp16_enable = False
+        self.l = None
+        self.training = training
+
+    def set_prob(self, epoch, max_epoch):
+        self.prob = self.st_prob * epoch / max_epoch  # + 1.#0.5
+
+    def __call__(self, input_dict):
+        x = input_dict['img'].copy()
+        if np.random.rand() > self.prob or not self.training:
+            input_dict['grid_mask_img'] = x
+            return input_dict
+        n, c, h, w = x.shape
+        x = x.reshape(-1, h, w)
+        hh = int(1.5 * h)
+        ww = int(1.5 * w)
+        d = np.random.randint(2, h)
+        self.l = min(max(int(d * self.ratio + 0.5), 1), d - 1)
+        mask = np.ones((hh, ww), np.float32)
+        st_h = np.random.randint(d)
+        st_w = np.random.randint(d)
+        if self.use_h:
+            for i in range(hh // d):
+                s = d * i + st_h
+                t = min(s + self.l, hh)
+                mask[s:t, :] *= 0
+        if self.use_w:
+            for i in range(ww // d):
+                s = d * i + st_w
+                t = min(s + self.l, ww)
+                mask[:, s:t] *= 0
+
+        r = np.random.randint(self.rotate)
+        mask = Image.fromarray(np.uint8(mask))
+        mask = mask.rotate(r)
+        mask = np.asarray(mask)
+        mask = mask[(hh - h) // 2:(hh - h) // 2 + h, (ww - w) // 2:(ww - w) // 2 + w]
+
+        mask = mask.astype(x.dtype)
+        if self.mode == 1:
+            mask = 1 - mask
+        mask = np.tile(mask, (x.shape[0], 1, 1))
+        if self.offset:
+            offset = (2 * (np.random.rand(h, w) - 0.5)).astype(x.dtype)
+            x = x * mask + offset * (1 - mask)
+        else:
+            x = x * mask
+        input_dict['grid_mask_img'] = x.reshape(n, c, h, w)
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(classes={self.classes})'
+        return repr_str
 
 
 class CustomNuScenesDataset(NuScenesDataset):
@@ -21,6 +97,8 @@ class CustomNuScenesDataset(NuScenesDataset):
         self.queue_length = queue_length
         self.overlap_test = overlap_test
         self.bev_size = bev_size
+        self.grid_mask = GridMask(
+            True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
 
     def prepare_train_data(self, index):
         """
@@ -42,6 +120,8 @@ class CustomNuScenesDataset(NuScenesDataset):
                 return None
             self.pre_pipeline(input_dict)
             example = run_transforms(input_dict, transforms=self.transforms)
+            if self.use_grid_mask:
+                example = self.grid_mask(example)
             gt_labels_3d = example['gt_labels_3d']
             if self.filter_empty_gt and \
                     (example is None or ~(gt_labels_3d != -1).any()):
@@ -51,6 +131,7 @@ class CustomNuScenesDataset(NuScenesDataset):
 
     def union2one(self, queue):
         imgs_list = [each['img'] for each in queue]
+        grid_imgs_list = [each['grid_mask_img'] for each in queue]
         metas_map = {}
         prev_scene_token = None
         prev_pos = None
@@ -73,6 +154,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
         queue[-1]['img'] = np.stack(imgs_list)
+        queue[-1]['grid_mask_img'] = np.stack(grid_imgs_list)
         queue[-1]['img_metas'] = metas_map
         queue = queue[-1]
         return queue
@@ -163,7 +245,7 @@ class CustomNuScenesDataset(NuScenesDataset):
     # ms.GeneratorDataset must have (numpy.ndarray, ...)
     def convert_data_to_numpy(self, data):
         # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
-        ordered_key = ['gt_labels_3d', 'img']
+        ordered_key = ['gt_labels_3d', 'img', 'grid_mask_img']
         data['gt_labels_3d'] = data['gt_labels_3d'].astype(np.int32)
         # convert gt_bboxes_3d (LiDARInstance3D) to numpy array
         gt_bbox_3d = data['gt_bboxes_3d']

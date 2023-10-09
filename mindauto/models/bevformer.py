@@ -21,7 +21,7 @@ def ms_split_array(array):
     return split_list
 
 @ms.jit
-def restore_img_metas(kwargs, new_args):
+def restore_img_metas(kwargs):
     # only support batch_size = 1
     # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
     #                     'lidar2img': list, 'scene_token': str, 'box_type_3d: type}
@@ -37,15 +37,11 @@ def restore_img_metas(kwargs, new_args):
     }
     img_meta_dict = {}
     for i, value in enumerate(kwargs[:-1]):
-        if i == 0:
-            new_args['gt_labels_3d'] = [value.squeeze(0)]
-        elif i == 1:
-            new_args['img'] = value
-        elif i >= 2 and i < 4:  # graph mode doesn't support 2 <= i < 4
+        if i < 5:
             continue
         else:
-            new_i = (i - 4) % 6
-            middle_key = (i - 4) // 6
+            new_i = (i - 5) % 6
+            middle_key = (i - 5) // 6
             last_key = key_mapping[new_i]
             if middle_key not in img_meta_dict:
                 img_meta_dict[middle_key] = {}
@@ -60,8 +56,7 @@ def restore_img_metas(kwargs, new_args):
                 img_meta_dict[middle_key][last_key] = ms_split_array(ops.split(img_shape, 1))
             else:  # can_bus float32
                 img_meta_dict[middle_key][last_key] = value.squeeze(0)
-    new_args['img_metas'] = [img_meta_dict]
-    return new_args
+    return img_meta_dict
 
 # TODO: modify for new key_list
 def restore_img_metas_for_test(kwargs, new_args):
@@ -93,12 +88,11 @@ def restore_img_metas_for_test(kwargs, new_args):
     new_args['img_metas'] = [[img_meta_dict]]
 
 @ms.jit
-def restore_3d_bbox(kwargs, new_args):
+def restore_3d_bbox(kwargs):
     tensor = kwargs[2].squeeze(0)
     gravity_center = kwargs[3].squeeze(0)
     lidar_inst = {'gravity_center': gravity_center, 'tensor': tensor}
-    new_args['gt_bboxes_3d'] = [lidar_inst]
-    return new_args
+    return lidar_inst
 
 
 class BEVFormer(MVXTwoStageDetector):
@@ -132,8 +126,6 @@ class BEVFormer(MVXTwoStageDetector):
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
-        self.grid_mask = GridMask(
-            True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
         self.use_grid_mask = use_grid_mask
         self.fp16_enabled = False
 
@@ -156,8 +148,9 @@ class BEVFormer(MVXTwoStageDetector):
             elif img.ndim == 5 and img.shape[0] > 1:
                 B, N, C, H, W = img.shape
                 img = img.reshape(B * N, C, H, W)
-            if self.use_grid_mask:
-                img = self.grid_mask(img)
+            # grid mask move to dataset prepare_train_data
+            # if self.use_grid_mask:
+            #     img = self.grid_mask(img)
             img_feats = self.img_backbone(img)  # mean abs diff 0.02
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
@@ -226,8 +219,13 @@ class BEVFormer(MVXTwoStageDetector):
         """
         new_args = {}
         if self.training:
-            new_args = restore_img_metas(args, new_args)
-            new_args = restore_3d_bbox(args, new_args)
+            img_meta_dict = restore_img_metas(args)
+            lidar_inst = restore_3d_bbox(args)
+            new_args['img'] = args[:-1][1]
+            new_args['grid_mask_img'] = args[:-1][2]
+            new_args['img_metas'] = [img_meta_dict]
+            new_args['gt_labels_3d'] = [args[:-1][0].squeeze(0)]
+            new_args['gt_bboxes_3d'] = [lidar_inst]
             return self.forward_train(**new_args)
         else:
             new_args['rescale'] = True
@@ -237,12 +235,11 @@ class BEVFormer(MVXTwoStageDetector):
     def obtain_history_bev(self, imgs_queue, img_metas_list):
         """Obtain history BEV features iteratively. To save GPU memory, gradients are not calculated.
         """
-        self.set_train(False)
-
         prev_bev = None
         bs, len_queue, num_cams, C, H, W = imgs_queue.shape
         imgs_queue = imgs_queue.reshape(bs * len_queue, num_cams, C, H, W)
         img_feats_list = self.extract_feat(img=imgs_queue, len_queue=len_queue)
+        img_feats_list = ops.stop_gradient(img_feats_list)
         for i in range(len_queue):
             img_metas = [each[i] for each in img_metas_list]
             if not img_metas[0]['prev_bev_exists']:
@@ -251,8 +248,7 @@ class BEVFormer(MVXTwoStageDetector):
             img_feats = [each_scale[:, i] for each_scale in img_feats_list]
             prev_bev = self.pts_bbox_head(
                 img_feats, img_metas, prev_bev, only_bev=True)
-
-        self.set_train(True)
+            prev_bev = ops.stop_gradient(prev_bev)
         return prev_bev
 
     def forward_train(self,
@@ -263,6 +259,7 @@ class BEVFormer(MVXTwoStageDetector):
                       gt_labels=None,
                       gt_bboxes=None,
                       img=None,
+                      grid_mask_img=None,
                       proposals=None,
                       gt_bboxes_ignore=None,
                       img_depth=None,
@@ -294,18 +291,29 @@ class BEVFormer(MVXTwoStageDetector):
         len_queue = img.shape[1]  # len_queue = 3
         prev_img = img[:, :-1, ...]
         img = img[:, -1, ...]
-        prev_img_metas = copy.deepcopy(img_metas)  # List[Dict{0: {}, 1: {}, 2: {}}] item numpy.ndarray
-        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas)
+        prev_grid_img = grid_mask_img[:, :-1, ...]
+        grid_img = grid_mask_img[:, -1, ...]
+        # img_metas: List[Dict{0: {}, 1: {}, 2: {}}]
+        prev_img_metas = img_metas  # graph mode doesn't support copy.deepcopy
+        if self.use_grid_mask:
+            prev_bev = self.obtain_history_bev(prev_grid_img, prev_img_metas)
+        else:
+            prev_bev = self.obtain_history_bev(prev_img, prev_img_metas)
 
         img_metas = [each[len_queue - 1] for each in img_metas]
-        if not img_metas[0]['prev_bev_exists']:
-            prev_bev = None
-        img_feats = self.extract_feat(img=img, img_metas=img_metas)
+        if self.use_grid_mask:
+            img_feats = self.extract_feat(img=grid_img, img_metas=img_metas)
+        else:
+            img_feats = self.extract_feat(img=img, img_metas=img_metas)
         losses = dict()
-        losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
-                                            gt_labels_3d, img_metas,
-                                            gt_bboxes_ignore, prev_bev)
-
+        if not img_metas[0]['prev_bev_exists']:
+            losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
+                                                gt_labels_3d, img_metas,
+                                                gt_bboxes_ignore, None)
+        else:
+            losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
+                                                gt_labels_3d, img_metas,
+                                                gt_bboxes_ignore, prev_bev)
         losses.update(losses_pts)
         total_loss = ms.Tensor(0.0)
         for _, each_loss in losses.items():
@@ -359,7 +367,7 @@ class BEVFormer(MVXTwoStageDetector):
 
     def simple_test(self, img_metas, img=None, prev_bev=None, rescale=False):
         """Test function without augmentaiton."""
-        img_feats = self.extract_feat(img=img, img_metas=img_metas)
+        img_feats = self.extract_feat(img=img, img_metas=img_metas)  # TODO
         bbox_list = [dict() for i in range(len(img_metas))]
         new_prev_bev, bbox_pts = self.simple_test_pts(
             img_feats, img_metas, prev_bev, rescale=rescale)

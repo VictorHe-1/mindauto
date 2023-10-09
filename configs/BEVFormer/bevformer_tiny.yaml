@@ -214,6 +214,7 @@ train: #  ema: True
       - CustomCollect3D:
           keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img']
     #  the order of the dataloader list, matching the network input and the input labels for the loss function, and optional data for debug/visualize
+    use_grid_mask: True
     classes: *class_names
     modality: *input_modality
     test_mode: False
@@ -221,7 +222,7 @@ train: #  ema: True
     bev_size: &bev_size [50, 50]
     queue_length: &queue_length 3
     box_type_3d: LiDAR
-    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d','img' ]
+    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img', 'grid_mask_img' ]
 #    net_input_column_index: [ 0 ] # input indices for network forward func in output_columns
 
   loader:

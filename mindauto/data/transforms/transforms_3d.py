@@ -4,7 +4,6 @@ import warnings
 
 import numpy as np
 from numpy import random
-import mindspore as ms
 
 import common
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
@@ -216,7 +215,7 @@ class PadLabel:
                 keys are updated in the result dict.
         """
         gt_labels_3d = input_dict['gt_labels_3d']
-        gt_labels_3d_pad = np.full((self.padding_size, ), self.padding_value, dtype=np.float32)
+        gt_labels_3d_pad = np.full((self.padding_size,), self.padding_value, dtype=np.float32)
         gt_bboxes_input = input_dict['gt_bboxes_3d'].input_tensor
         bboxes_pad = np.full((self.padding_size, 9), self.padding_value, dtype=np.float32)
         gt_len = len(gt_labels_3d)

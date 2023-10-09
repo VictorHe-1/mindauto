@@ -125,9 +125,11 @@ class NuScenesDataset(Custom3DDataset):
                  filter_empty_gt=True,
                  test_mode=False,
                  eval_version='detection_cvpr_2019',
-                 use_valid_flag=False):
+                 use_valid_flag=False,
+                 use_grid_mask=False):
         self.load_interval = load_interval
         self.use_valid_flag = use_valid_flag
+        self.use_grid_mask = use_grid_mask
         super().__init__(
             data_root=data_root,
             ann_file=ann_file,

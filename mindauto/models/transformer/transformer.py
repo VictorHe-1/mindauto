@@ -437,7 +437,7 @@ class PerceptionTransformer(nn.Cell):
         shift_y = shift_y * self.use_shift
         shift_x = shift_x * self.use_shift
         shift = ms.Tensor([shift_x, shift_y], dtype=bev_queries.dtype).permute(1, 0)  # xy, bs -> bs, xy
-
+        concat = ops.Concat(axis=1)
         if prev_bev is not None:
             if prev_bev.shape[1] == bev_h * bev_w:
                 prev_bev = prev_bev.permute(1, 0, 2)
@@ -452,7 +452,8 @@ class PerceptionTransformer(nn.Cell):
                     tmp_prev_bev = ms.Tensor(rotate(tmp_prev_bev.asnumpy()), dtype=ms.float32)
                     tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
                         bev_h * bev_w, 1, -1)
-                    prev_bev[:, i] = tmp_prev_bev[:, 0]
+                    # prev_bev[:, i] = tmp_prev_bev[:, 0]
+                    prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))
 
         # add can bus signals
         can_bus = ms.Tensor([each['can_bus'] for each in kwargs['img_metas']], dtype=bev_queries.dtype)
