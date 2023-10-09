@@ -133,7 +133,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                   valid_ratios=None,
                   prev_bev=None,
                   shift=0.,
-                  **kwargs):
+                  img_metas=None):
         """Forward function for `TransformerDecoder`.
         Args:
             bev_query (Tensor): Input BEV query with shape
@@ -161,7 +161,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         ref_2d = self.get_reference_points(
             bev_h, bev_w, dim='2d', bs=bev_query.shape[1], dtype=bev_query.dtype)
         reference_points_cam, bev_mask = self.point_sampling(
-            ref_3d, self.pc_range, kwargs['img_metas'])
+            ref_3d, self.pc_range, img_metas)
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
         shift_ref_2d = ref_2d.copy()
@@ -187,18 +187,17 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 bev_query,
                 key,
                 value,
-                *args,
-                bev_pos=bev_pos,
-                ref_2d=hybird_ref_2d,
-                ref_3d=ref_3d,
-                bev_h=bev_h,
-                bev_w=bev_w,
-                spatial_shapes=spatial_shapes,
-                level_start_index=level_start_index,
-                reference_points_cam=reference_points_cam,
-                bev_mask=bev_mask,
-                prev_bev=prev_bev,
-                **kwargs)
+                bev_pos,
+                hybird_ref_2d,
+                ref_3d,
+                bev_h,
+                bev_w,
+                spatial_shapes,
+                level_start_index,
+                reference_points_cam,
+                bev_mask,
+                prev_bev,
+                img_metas)
             bev_query = output
             if self.return_intermediate:
                 intermediate.append(output)
@@ -258,21 +257,22 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                   key=None,
                   value=None,
                   bev_pos=None,
-                  query_pos=None,
-                  key_pos=None,
-                  attn_masks=None,
-                  query_key_padding_mask=None,
-                  key_padding_mask=None,
                   ref_2d=None,
                   ref_3d=None,
                   bev_h=None,
                   bev_w=None,
-                  reference_points_cam=None,
-                  mask=None,
                   spatial_shapes=None,
                   level_start_index=None,
+                  reference_points_cam=None,
+                  bev_mask=None,
                   prev_bev=None,
-                  **kwargs):
+                  img_metas=None,
+                  mask=None,
+                  query_pos=None,
+                  key_pos=None,
+                  attn_masks=None,
+                  query_key_padding_mask=None,
+                  key_padding_mask=None):
         """Forward function for `TransformerDecoderLayer`.
 
         **kwargs contains some specific arguments of attentions.
@@ -330,14 +330,15 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     prev_bev,
                     prev_bev,
                     identity if self.pre_norm else None,
-                    query_pos=bev_pos,
+                    bev_pos,
+                    query_key_padding_mask,
+                    ref_2d,
+                    ms.Tensor([[bev_h, bev_w]]),
+                    ms.Tensor([0]),
                     key_pos=bev_pos,
                     attn_mask=attn_masks[attn_index],
-                    key_padding_mask=query_key_padding_mask,
-                    reference_points=ref_2d,
-                    spatial_shapes=np.array([[bev_h, bev_w]]),
-                    level_start_index=ms.Tensor([0]),
-                    **kwargs)
+                    bev_mask=bev_mask,
+                    img_metas=img_metas)
                 attn_index += 1
                 identity = query
 
@@ -361,7 +362,8 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     key_padding_mask=key_padding_mask,
                     spatial_shapes=spatial_shapes,
                     level_start_index=level_start_index,
-                    **kwargs)
+                    bev_mask=bev_mask,
+                    img_metas=img_metas)
                 attn_index += 1
                 identity = query
 

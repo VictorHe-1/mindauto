@@ -410,7 +410,7 @@ class PerceptionTransformer(nn.Cell):
             grid_length=[0.512, 0.512],
             bev_pos=None,
             prev_bev=None,
-            **kwargs):
+            img_metas=None):
         """
         obtain bev features.
         """
@@ -420,11 +420,11 @@ class PerceptionTransformer(nn.Cell):
 
         # obtain rotation angle and shift with ego motion
         delta_x = np.array([each['can_bus'][0]
-                            for each in kwargs['img_metas']])
+                            for each in img_metas])
         delta_y = np.array([each['can_bus'][1]
-                            for each in kwargs['img_metas']])
+                            for each in img_metas])
         ego_angle = np.array(
-            [each['can_bus'][-2] / np.pi * 180 for each in kwargs['img_metas']])
+            [each['can_bus'][-2] / np.pi * 180 for each in img_metas])
         grid_length_y = grid_length[0]
         grid_length_x = grid_length[1]
         translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
@@ -444,7 +444,7 @@ class PerceptionTransformer(nn.Cell):
             if self.rotate_prev_bev:
                 for i in range(bs):
                     # num_prev_bev = prev_bev.size(1)
-                    rotation_angle = kwargs['img_metas'][i]['can_bus'][-1]
+                    rotation_angle = img_metas[i]['can_bus'][-1]
                     tmp_prev_bev = prev_bev[:, i].reshape(
                         bev_h, bev_w, -1).permute(2, 0, 1)
                     # Warning: this rotation replace the original torchvision.transforms.functional.rotate
@@ -456,7 +456,7 @@ class PerceptionTransformer(nn.Cell):
                     prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))
 
         # add can bus signals
-        can_bus = ops.stack([each['can_bus'] for each in kwargs['img_metas']], 0)
+        can_bus = ops.stack([each['can_bus'] for each in img_metas], 0)
         can_bus = self.can_bus_mlp(can_bus)[None, :, :]
         bev_queries = bev_queries + can_bus * self.use_can_bus
 
@@ -490,7 +490,7 @@ class PerceptionTransformer(nn.Cell):
             level_start_index=level_start_index,
             prev_bev=prev_bev,
             shift=shift,
-            **kwargs
+            img_metas=img_metas
         )
 
         return bev_embed
