@@ -307,7 +307,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         Returns:
             Tensor: forwarded results with shape [num_queries, bs, embed_dims].
         """
-        spatial_shapes = spatial_shapes.asnumpy().astype(np.int64)
         norm_index = 0
         attn_index = 0
         ffn_index = 0
@@ -351,7 +350,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 norm_index += 1
 
             # spaital cross attention
-            elif layer == 'cross_attn':
+            elif layer == 'cross_attn':  # spatial_cross_attn
                 query = self.attentions[attn_index](
                     query,
                     key,

@@ -1,7 +1,6 @@
 import warnings
 import math
 
-import numpy as np
 import mindspore as ms
 from mindspore import nn, ops
 import mindspore.common.initializer as init
@@ -160,7 +159,7 @@ class MSDeformableAttention3D(nn.Cell):
 
         bs, num_query, _ = query.shape
         bs, num_value, _ = value.shape
-        assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
+        assert ops.prod(spatial_shapes) == num_value
 
         value = self.value_proj(value)
         if key_padding_mask is not None:
@@ -185,10 +184,8 @@ class MSDeformableAttention3D(nn.Cell):
             For each referent point, we sample `num_points` sampling points.
             For `num_Z_anchors` reference points,  it has overall `num_points * num_Z_anchors` sampling points.
             """
-            offset_normalizer = np.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1)
-            offset_normalizer = ms.Tensor(offset_normalizer, dtype=ms.float32)
-
+            offset_normalizer = ops.stack(
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
             bs, num_query, num_Z_anchors, xy = reference_points.shape
             reference_points = reference_points[:, :, None, None, None, :, :]
             sampling_offsets = sampling_offsets / \
