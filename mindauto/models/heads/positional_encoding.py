@@ -18,13 +18,19 @@ class LearnedPositionalEncoding(nn.Cell):
     def __init__(self,
                  num_feats,
                  row_num_embed=50,
-                 col_num_embed=50):
+                 col_num_embed=50,
+                 bs=1,
+                 h=50,
+                 w=50):
         super(LearnedPositionalEncoding, self).__init__()
         self.row_embed = nn.Embedding(row_num_embed, num_feats)
         self.col_embed = nn.Embedding(col_num_embed, num_feats)
         self.num_feats = num_feats
         self.row_num_embed = row_num_embed
         self.col_num_embed = col_num_embed
+        self.h = h
+        self.w = w
+        self.bs = bs
 
     def construct(self, mask):
         """Forward function for `LearnedPositionalEncoding`.
@@ -38,16 +44,16 @@ class LearnedPositionalEncoding(nn.Cell):
             pos (Tensor): Returned position embedding with shape
                 [bs, num_feats*2, h, w].
         """
-        h, w = mask.shape[-2:]
-        x = ops.arange(w)
-        y = ops.arange(h)
+        # h, w = mask.shape[-2:]
+        x = ops.arange(self.w)
+        y = ops.arange(self.h)
         x_embed = self.col_embed(x)
         y_embed = self.row_embed(y)
         pos = ops.cat(
-            (x_embed.unsqueeze(0).tile((h, 1, 1)), y_embed.unsqueeze(1).tile(
-                (1, w, 1))),
+            (x_embed.unsqueeze(0).tile((self.h, 1, 1)), y_embed.unsqueeze(1).tile(
+                (1, self.w, 1))),
             axis=-1).permute(2, 0,
-                             1).unsqueeze(0).tile((mask.shape[0], 1, 1, 1))
+                             1).unsqueeze(0).tile((self.bs, 1, 1, 1))
         return pos
 
     def __repr__(self):
