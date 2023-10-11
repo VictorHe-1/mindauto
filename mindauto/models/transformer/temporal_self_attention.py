@@ -1,7 +1,6 @@
 import warnings
 import math
 
-import numpy as np
 from mindspore import nn, ops
 import mindspore as ms
 
@@ -116,8 +115,11 @@ class TemporalSelfAttention(nn.Cell):
                 reference_points=None,
                 spatial_shapes=None,
                 level_start_index=None,
-                flag='decoder',
-                **kwargs):
+                key_pos=None,
+                attn_mask=None,
+                bev_mask=None,
+                img_metas=None,
+                flag='decoder'):
         """Forward Function of MultiScaleDeformAttention.
 
         Args:
@@ -153,7 +155,6 @@ class TemporalSelfAttention(nn.Cell):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-
         if value is None:
             assert self.batch_first
             bs, len_bev, c = query.shape
