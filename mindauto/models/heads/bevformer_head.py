@@ -149,8 +149,8 @@ class BEVFormerHead(DETRHead):
         object_query_embeds = self.query_embedding.embedding_table.astype(dtype)
         bev_queries = self.bev_embedding.embedding_table.astype(dtype)
 
-        bev_mask = ops.zeros((bs, self.bev_h, self.bev_w)).astype(dtype)
-        bev_pos = self.positional_encoding(bev_mask).astype(dtype)
+        new_mask = ops.zeros((bs, self.bev_h, self.bev_w)).astype(dtype)
+        bev_pos = self.positional_encoding(new_mask).astype(dtype)
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
             return self.transformer.get_bev_features(
                 mlvl_feats,
@@ -160,8 +160,8 @@ class BEVFormerHead(DETRHead):
                 grid_length=(self.real_h / self.bev_h,
                              self.real_w / self.bev_w),
                 bev_pos=bev_pos,
-                img_metas=img_metas,
                 prev_bev=prev_bev,
+                img_metas=img_metas,
                 indexes=indexes,
                 reference_points_cam=reference_points_cam,
                 bev_mask=bev_mask,
@@ -204,16 +204,24 @@ class BEVFormerHead(DETRHead):
             tmp = self.reg_branches[lvl](hs[lvl])
             # TODO: check the shape of reference
             assert reference.shape[-1] == 3
-            tmp[..., 0:2] += reference[..., 0:2]
-            tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
-            tmp[..., 4:5] += reference[..., 2:3]
-            tmp[..., 4:5] = tmp[..., 4:5].sigmoid()
-            tmp[..., 0:1] = (tmp[..., 0:1] * (self.pc_range[3] -
-                                              self.pc_range[0]) + self.pc_range[0])
-            tmp[..., 1:2] = (tmp[..., 1:2] * (self.pc_range[4] -
+
+            tmp_part1 = tmp[..., 0:2]
+            tmp_part2 = tmp[..., 4:5]
+            reference_part1 = reference[..., 0:2]
+            reference_part2 = reference[..., 2:3]
+            tmp_part1 = tmp_part1 + reference_part1
+            tmp_part2 = tmp_part2 + reference_part2
+            tmp_part1 = tmp_part1.sigmoid()
+            tmp_part2 = tmp_part2.sigmoid()
+            new_tmp_part1 = (tmp_part1[..., 0:1] * (self.pc_range[3] -
+                                                     self.pc_range[0]) + self.pc_range[0])
+
+            new_tmp_part2 = (tmp_part1[..., 1:2] * (self.pc_range[4] -
                                               self.pc_range[1]) + self.pc_range[1])
-            tmp[..., 4:5] = (tmp[..., 4:5] * (self.pc_range[5] -
+
+            new_tmp_part3 = (tmp_part2 * (self.pc_range[5] -
                                               self.pc_range[2]) + self.pc_range[2])
+            tmp = ops.concat((new_tmp_part1, new_tmp_part2, tmp[..., 2:4], new_tmp_part3, tmp[..., 5:]), axis=-1)
 
             # TODO: check if using sigmoid
             outputs_coord = tmp

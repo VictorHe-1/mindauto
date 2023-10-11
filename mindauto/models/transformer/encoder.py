@@ -126,19 +126,18 @@ class BEVFormerEncoder(TransformerLayerSequence):
                   bev_query,
                   key,
                   value,
-                  *args,
                   bev_h=None,
                   bev_w=None,
                   bev_pos=None,
                   spatial_shapes=None,
                   level_start_index=None,
-                  valid_ratios=None,
                   prev_bev=None,
                   shift=0.,
                   img_metas=None,
                   indexes=None,
                   reference_points_cam=None,
-                  bev_mask=None):
+                  bev_mask=None,
+                  valid_ratios=None):
         """Forward function for `TransformerDecoder`.
         Args:
             bev_query (Tensor): Input BEV query with shape
@@ -329,7 +328,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
 
         for layer in self.operation_order:
             # temporal self attention
-            if layer == 'self_attn':
+            if layer == 'self_attn':  # temporal_self_attention
                 query = self.attentions[attn_index](
                     query,
                     prev_bev,

@@ -469,17 +469,17 @@ class PerceptionTransformer(nn.Cell):
             bev_queries,
             feat_flatten,
             feat_flatten,
-            bev_h=bev_h,
-            bev_w=bev_w,
-            bev_pos=bev_pos,
-            spatial_shapes=spatial_shapes,
-            level_start_index=level_start_index,
-            prev_bev=prev_bev,
-            shift=shift,
-            img_metas=img_metas,
-            indexes=indexes,
-            reference_points_cam=reference_points_cam,
-            bev_mask=bev_mask
+            bev_h,
+            bev_w,
+            bev_pos,
+            spatial_shapes,
+            level_start_index,
+            prev_bev,
+            shift,
+            img_metas,
+            indexes,
+            reference_points_cam,
+            bev_mask
         )
 
         return bev_embed
@@ -544,8 +544,8 @@ class PerceptionTransformer(nn.Cell):
             bev_w,
             grid_length=grid_length,
             bev_pos=bev_pos,
-            img_metas=img_metas,
             prev_bev=prev_bev,
+            img_metas=img_metas,
             indexes=indexes,
             reference_points_cam=reference_points_cam,
             bev_mask=bev_mask,
