@@ -336,7 +336,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     bev_pos,
                     query_key_padding_mask,
                     ref_2d,
-                    ms.Tensor([[bev_h, bev_w]]),
+                    [[bev_h, bev_w]],
                     ms.Tensor([0]),
                     key_pos=bev_pos,
                     attn_mask=attn_masks[attn_index],

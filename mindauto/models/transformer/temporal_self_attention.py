@@ -170,7 +170,9 @@ class TemporalSelfAttention(nn.Cell):
             value = value.permute(1, 0, 2)
         bs, num_query, embed_dims = query.shape
         _, num_value, _ = value.shape
-        assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
+        spatial_shapes_tensor = ms.Tensor(spatial_shapes)
+        result = sum(shape[0] * shape[1] for shape in spatial_shapes)
+        assert result == num_value
         assert self.num_bev_queue == 2
 
         query = ops.cat([value[:bs], query], -1)
@@ -201,10 +203,16 @@ class TemporalSelfAttention(nn.Cell):
             .reshape(bs * self.num_bev_queue, num_query, self.num_heads, self.num_levels, self.num_points, 2)
         if reference_points.shape[-1] == 2:
             offset_normalizer = ops.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
-            sampling_locations = reference_points[:, :, None, :, None, :] \
-                                 + sampling_offsets \
-                                 / offset_normalizer[None, None, None, :, None, :]
+                [spatial_shapes_tensor[..., 1], spatial_shapes_tensor[..., 0]], axis=-1).astype(ms.float32)
+            new_reference_points = ops.expand_dims(reference_points, 3)
+            new_reference_points = ops.expand_dims(new_reference_points, 2)
+
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=1)
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
+
+            sampling_locations = new_reference_points + sampling_offsets / offset_normalizer
         elif reference_points.shape[-1] == 4:
             sampling_locations = reference_points[:, :, None, :, None, :2] \
                                  + sampling_offsets / self.num_points \

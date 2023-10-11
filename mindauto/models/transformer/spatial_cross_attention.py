@@ -159,7 +159,9 @@ class MSDeformableAttention3D(nn.Cell):
 
         bs, num_query, _ = query.shape
         bs, num_value, _ = value.shape
-        assert ops.prod(spatial_shapes) == num_value
+        spatial_shapes_tensor = ms.Tensor(spatial_shapes)
+        result = sum(shape[0] * shape[1] for shape in spatial_shapes)
+        assert result == num_value
 
         value = self.value_proj(value)
         if key_padding_mask is not None:
@@ -185,7 +187,7 @@ class MSDeformableAttention3D(nn.Cell):
             For `num_Z_anchors` reference points,  it has overall `num_points * num_Z_anchors` sampling points.
             """
             offset_normalizer = ops.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
+                [spatial_shapes_tensor[..., 1], spatial_shapes_tensor[..., 0]], axis=-1).astype(ms.float32)
             bs, num_query, num_Z_anchors, xy = reference_points.shape
             reference_points = ops.expand_dims(reference_points, axis=2)
             reference_points = ops.expand_dims(reference_points, axis=3)
@@ -218,7 +220,6 @@ class MSDeformableAttention3D(nn.Cell):
         #  sampling_locations.shape: bs, num_query, num_heads, num_levels, num_all_points, 2
         #  attention_weights.shape: bs, num_query, num_heads, num_levels, num_all_points
         #
-
         output = multi_scale_deformable_attn_pytorch(
             value, spatial_shapes, sampling_locations, attention_weights)
         if not self.batch_first:
