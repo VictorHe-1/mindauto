@@ -187,9 +187,17 @@ class MSDeformableAttention3D(nn.Cell):
             offset_normalizer = ops.stack(
                 [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
             bs, num_query, num_Z_anchors, xy = reference_points.shape
-            reference_points = reference_points[:, :, None, None, None, :, :]
-            sampling_offsets = sampling_offsets / \
-                               offset_normalizer[None, None, None, :, None, :]
+            reference_points = ops.expand_dims(reference_points, axis=2)
+            reference_points = ops.expand_dims(reference_points, axis=3)
+            reference_points = ops.expand_dims(reference_points, axis=4)
+
+            # graph mode doesn't support offset_normalizer[None, None, None, :, None, :]
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=1)
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
+            offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
+
+            sampling_offsets = sampling_offsets / offset_normalizer
             bs, num_query, num_heads, num_levels, num_all_points, xy = sampling_offsets.shape
             sampling_offsets = sampling_offsets.view(
                 bs, num_query, num_heads, num_levels, num_all_points // num_Z_anchors, num_Z_anchors, xy)
