@@ -31,10 +31,8 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, num_heads, num_levels, num_points, _ = \
         sampling_locations.shape
-    # value_spatial_shapes = value_spatial_shapes.tolist()
-    # value_list = value.split([H_ * W_ for H_, W_ in value_spatial_shapes],
-    #                          axis=1)
-    value_list = value.split([2500], axis=1)  # TODO: only for bevformer_tiny.yaml: bev_h * bev_w = 2500
+    value_list = value.split([int(H_ * W_) for H_, W_ in value_spatial_shapes],
+                             axis=1)  # value_spatial_shapes dynamic
     sampling_grids = 2 * sampling_locations - 1
     sampling_value_list = []
     for level, (H_, W_) in enumerate(value_spatial_shapes):
@@ -43,7 +41,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
         # bs, num_heads*embed_dims, H_*W_ ->
         # bs*num_heads, embed_dims, H_, W_
         value_l_ = ops.swapaxes(ops.flatten(value_list[level], start_dim=2), 1, 2).reshape(
-            bs * num_heads, embed_dims, 50, 50)  # H_: 50 W_: 50
+            bs * num_heads, embed_dims, H_, W_)
         # bs, num_queries, num_heads, num_points, 2 ->
         # bs, num_heads, num_queries, num_points, 2 ->
         # bs*num_heads, num_queries, num_points, 2
