@@ -225,15 +225,19 @@ class BaseTransformerLayer(nn.Cell):
             self.norms.append(build_norm_layer(norm_cfg))
 
     def construct(self,
-                query,
-                key=None,
-                value=None,
-                query_pos=None,
-                key_pos=None,
-                attn_masks=None,
-                query_key_padding_mask=None,
-                key_padding_mask=None,
-                **kwargs):
+                  query,
+                  key=None,
+                  value=None,
+                  query_pos=None,
+                  reference_points=None,
+                  cls_branches=None,
+                  spatial_shapes=None,
+                  level_start_index=None,
+                  img_metas=None,
+                  key_padding_mask=None,
+                  key_pos=None,
+                  attn_masks=None,
+                  query_key_padding_mask=None):
         """Forward function for `TransformerDecoderLayer`.
 
         **kwargs contains some specific arguments of attentions.
@@ -295,7 +299,7 @@ class BaseTransformerLayer(nn.Cell):
                     key_pos=query_pos,
                     attn_mask=attn_masks[attn_index],
                     key_padding_mask=query_key_padding_mask,
-                    **kwargs)
+                )
                 attn_index += 1
                 identity = query
 
@@ -312,8 +316,8 @@ class BaseTransformerLayer(nn.Cell):
                     query_pos=query_pos,
                     key_pos=key_pos,
                     attn_mask=attn_masks[attn_index],
-                    key_padding_mask=key_padding_mask,
-                    **kwargs)
+                    key_padding_mask=key_padding_mask
+                )
                 attn_index += 1
                 identity = query
 

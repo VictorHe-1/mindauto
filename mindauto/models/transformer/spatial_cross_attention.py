@@ -102,16 +102,16 @@ class MSDeformableAttention3D(nn.Cell):
         self._is_init = True
 
     def construct(self,
-                query,
-                key=None,
-                value=None,
-                identity=None,
-                query_pos=None,
-                key_padding_mask=None,
-                reference_points=None,
-                spatial_shapes=None,
-                level_start_index=None,
-                **kwargs):
+                  query,
+                  key=None,
+                  value=None,
+                  reference_points=None,
+                  spatial_shapes=None,
+                  level_start_index=None,
+                  identity=None,
+                  query_pos=None,
+                  key_padding_mask=None,
+                  ):
         """Forward Function of MultiScaleDeformAttention.
         Args:
             query (Tensor): Query of Transformer with shape
@@ -214,7 +214,6 @@ class MSDeformableAttention3D(nn.Cell):
         #  attention_weights.shape: bs, num_query, num_heads, num_levels, num_all_points
         #
 
-
         output = multi_scale_deformable_attn_pytorch(
             value, spatial_shapes, sampling_locations, attention_weights)
         if not self.batch_first:
@@ -270,19 +269,22 @@ class SpatialCrossAttention(nn.Cell):
             init.initializer(init.Zero(), self.output_proj.bias.shape, self.output_proj.bias.dtype))
 
     def construct(self,
-                query,
-                key,
-                value,
-                residual=None,
-                query_pos=None,
-                key_padding_mask=None,
-                reference_points=None,
-                spatial_shapes=None,
-                reference_points_cam=None,
-                bev_mask=None,
-                level_start_index=None,
-                flag='encoder',
-                **kwargs):
+                  query,
+                  key,
+                  value,
+                  residual=None,
+                  query_pos=None,
+                  key_padding_mask=None,
+                  spatial_shapes=None,
+                  reference_points_cam=None,
+                  bev_mask=None,
+                  level_start_index=None,
+                  key_pos=None,
+                  mask=None,
+                  attn_mask=None,
+                  img_metas=None,
+                  indexes=None,
+                  flag='encoder'):
         """Forward Function of Detr3DCrossAtten.
         Args:
             query (Tensor): Query of Transformer with shape
@@ -332,24 +334,30 @@ class SpatialCrossAttention(nn.Cell):
         bs, num_query, _ = query.shape
 
         D = reference_points_cam.shape[3]
-        indexes = []
-        for i, mask_per_img in enumerate(bev_mask):
-            index_query_per_img = mask_per_img[0].sum(-1).nonzero().squeeze(-1)
-            indexes.append(index_query_per_img)
-        max_len = max([len(each) for each in indexes])
+        # for graph mode: we cannot use the following codes:
+        # indexes = []
+        # for i, mask_per_img in enumerate(bev_mask):
+        #     index_query_per_img = mask_per_img[0].sum(axis=-1).astype(ms.int32).nonzero().squeeze(-1)
+        #     indexes.append(index_query_per_img)
+        # max_len = max([len(each) for each in indexes])
+        max_len = 2500  # bev_h * bev_w
 
-        # each camera only interacts with its corresponding BEV queries. This step can  greatly save GPU memory.
-        queries_rebatch = query.new_zeros(
-            [bs, self.num_cams, max_len, self.embed_dims])
-        reference_points_rebatch = reference_points_cam.new_zeros(
-            [bs, self.num_cams, max_len, D, 2])
-
-        for j in range(bs):
-            for i, reference_points_per_img in enumerate(reference_points_cam):
-                index_query_per_img = indexes[i]
-                queries_rebatch[j, i, :len(index_query_per_img)] = query[j, index_query_per_img]
-                reference_points_rebatch[j, i, :len(index_query_per_img)] = reference_points_per_img[
-                    j, index_query_per_img]
+        # each camera only interacts with its corresponding BEV queries. This step can greatly save GPU memory.
+        # queries_rebatch = query.new_zeros(
+        #     [bs, self.num_cams, max_len, self.embed_dims])
+        # reference_points_rebatch = reference_points_cam.new_zeros(
+        #     [bs, self.num_cams, max_len, D, 2])
+        queries_rebatch_bs = []
+        reference_points_rebatch_bs = []
+        for i, reference_points_per_img in enumerate(reference_points_cam):
+            index_query_per_img = indexes[i]
+            queries_rebatch_bs.append(ops.matmul(index_query_per_img, query[0]))
+            reference_points_rebatch_bs.append(
+                ops.matmul(index_query_per_img, reference_points_per_img[0].reshape(max_len, D * 2)).reshape(max_len, D,
+                                                                                                             2)
+            )
+        queries_rebatch = ops.stack(queries_rebatch_bs).unsqueeze(1)
+        reference_points_rebatch = ops.stack(reference_points_rebatch_bs).unsqueeze(1)
 
         num_cams, l, bs, embed_dims = key.shape
 
@@ -358,16 +366,16 @@ class SpatialCrossAttention(nn.Cell):
         value = value.permute(2, 0, 1, 3).reshape(
             bs * self.num_cams, l, self.embed_dims)
 
-        queries = self.deformable_attention(query=queries_rebatch.view(bs * self.num_cams, max_len, self.embed_dims),
-                                            key=key, value=value,
-                                            reference_points=reference_points_rebatch.view(bs * self.num_cams, max_len,
-                                                                                           D, 2),
-                                            spatial_shapes=spatial_shapes,
-                                            level_start_index=level_start_index).view(bs, self.num_cams, max_len,
-                                                                                      self.embed_dims)
+        queries = self.deformable_attention(queries_rebatch.view(bs * self.num_cams, max_len, self.embed_dims),
+                                            key,
+                                            value,
+                                            reference_points_rebatch.view(bs * self.num_cams, max_len, D, 2),
+                                            spatial_shapes,
+                                            level_start_index).view(bs, self.num_cams, max_len, self.embed_dims)
         for j in range(bs):
             for i, index_query_per_img in enumerate(indexes):
-                slots[j, index_query_per_img] += queries[j, i, :len(index_query_per_img)]
+                slots[j] += ops.matmul(index_query_per_img, queries[j, i])
+                # slots[j, index_query_per_img] += queries[j, i, :len(index_query_per_img)]
 
         count = bev_mask.sum(-1) > 0
         count = count.permute(1, 2, 0).sum(-1)

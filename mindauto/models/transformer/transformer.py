@@ -227,7 +227,7 @@ class MultiheadAttention(nn.Cell):
                   key_pos=None,
                   attn_mask=None,
                   key_padding_mask=None,
-                  **kwargs):
+                  ):
         """Forward function for `MultiheadAttention`.
 
         **kwargs allow passing a more general data flow when combining
@@ -410,7 +410,11 @@ class PerceptionTransformer(nn.Cell):
             grid_length=[0.512, 0.512],
             bev_pos=None,
             prev_bev=None,
-            img_metas=None):
+            img_metas=None,
+            indexes=None,
+            reference_points_cam=None,
+            bev_mask=None,
+            shift=None):
         """
         obtain bev features.
         """
@@ -419,24 +423,6 @@ class PerceptionTransformer(nn.Cell):
         bev_pos = ops.flatten(bev_pos, start_dim=2).permute(2, 0, 1)
 
         # obtain rotation angle and shift with ego motion
-        delta_x = np.array([each['can_bus'][0]
-                            for each in img_metas])
-        delta_y = np.array([each['can_bus'][1]
-                            for each in img_metas])
-        ego_angle = np.array(
-            [each['can_bus'][-2] / np.pi * 180 for each in img_metas])
-        grid_length_y = grid_length[0]
-        grid_length_x = grid_length[1]
-        translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
-        translation_angle = np.arctan2(delta_y, delta_x) / np.pi * 180
-        bev_angle = ego_angle - translation_angle
-        shift_y = translation_length * \
-                  np.cos(bev_angle / 180 * np.pi) / grid_length_y / bev_h
-        shift_x = translation_length * \
-                  np.sin(bev_angle / 180 * np.pi) / grid_length_x / bev_w
-        shift_y = shift_y * self.use_shift
-        shift_x = shift_x * self.use_shift
-        shift = ms.Tensor([shift_x, shift_y], dtype=bev_queries.dtype).permute(1, 0)  # xy, bs -> bs, xy
         concat = ops.Concat(axis=1)
         if prev_bev is not None:
             if prev_bev.shape[1] == bev_h * bev_w:
@@ -490,7 +476,10 @@ class PerceptionTransformer(nn.Cell):
             level_start_index=level_start_index,
             prev_bev=prev_bev,
             shift=shift,
-            img_metas=img_metas
+            img_metas=img_metas,
+            indexes=indexes,
+            reference_points_cam=reference_points_cam,
+            bev_mask=bev_mask
         )
 
         return bev_embed
@@ -506,7 +495,12 @@ class PerceptionTransformer(nn.Cell):
                   reg_branches=None,
                   cls_branches=None,
                   prev_bev=None,
-                  **kwargs):
+                  img_metas=None,
+                  indexes=None,
+                  reference_points_cam=None,
+                  bev_mask=None,
+                  shift=None
+                  ):
         """Forward function for `Detr3DTransformer`.
         Args:
             mlvl_feats (list(Tensor)): Input queries from
@@ -550,8 +544,12 @@ class PerceptionTransformer(nn.Cell):
             bev_w,
             grid_length=grid_length,
             bev_pos=bev_pos,
+            img_metas=img_metas,
             prev_bev=prev_bev,
-            **kwargs)  # bev_embed shape: bs, bev_h*bev_w, embed_dims
+            indexes=indexes,
+            reference_points_cam=reference_points_cam,
+            bev_mask=bev_mask,
+            shift=shift)  # bev_embed shape: bs, bev_h*bev_w, embed_dims
 
         bs = mlvl_feats[0].shape[0]
         query_pos, query = ops.split(
@@ -573,9 +571,9 @@ class PerceptionTransformer(nn.Cell):
             reference_points=reference_points,
             reg_branches=reg_branches,
             cls_branches=cls_branches,
-            spatial_shapes=np.array([[bev_h, bev_w]]),
+            spatial_shapes=ms.Tensor([[bev_h, bev_w]]),
             level_start_index=ms.Tensor([0], dtype=ms.float32),
-            **kwargs)
+            img_metas=img_metas)
         inter_references_out = inter_references
 
         return bev_embed, inter_states, init_reference_out, inter_references_out

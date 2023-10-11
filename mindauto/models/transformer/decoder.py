@@ -26,11 +26,16 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
 
     def construct(self,
                   query,
-                  *args,
+                  key,
+                  value,
+                  query_pos,
                   reference_points=None,
                   reg_branches=None,
+                  cls_branches=None,
+                  spatial_shapes=None,
+                  level_start_index=None,
                   key_padding_mask=None,
-                  **kwargs):
+                  img_metas=None):
         """Forward function for `Detr3DTransformerDecoder`.
         Args:
             query (Tensor): Input query with shape
@@ -52,15 +57,20 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
         intermediate = []
         intermediate_reference_points = []
         for lid, layer in enumerate(self.layers):
-
             reference_points_input = reference_points[..., :2].unsqueeze(
                 2)  # BS NUM_QUERY NUM_LEVEL 2
             output = layer(
                 output,
-                *args,
+                key=key,
+                value=value,
+                query_pos=query_pos,
                 reference_points=reference_points_input,
+                cls_branches=cls_branches,
+                spatial_shapes=spatial_shapes,
+                level_start_index=level_start_index,
+                img_metas=img_metas,
                 key_padding_mask=key_padding_mask,
-                **kwargs)
+                )
             output = output.permute(1, 0, 2)
             if reg_branches is not None:
                 tmp = reg_branches[lid](output)
@@ -190,12 +200,13 @@ class CustomMSDeformableAttention(nn.Cell):
                   value=None,
                   identity=None,
                   query_pos=None,
+                  key_pos=None,
+                  attn_mask=None,
                   key_padding_mask=None,
                   reference_points=None,
                   spatial_shapes=None,
                   level_start_index=None,
-                  flag='decoder',
-                  **kwargs):
+                  flag='decoder'):
         """Forward Function of MultiScaleDeformAttention.
 
         Args:

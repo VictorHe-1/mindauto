@@ -114,7 +114,9 @@ class BEVFormerEncoder(TransformerLayerSequence):
                     & (reference_points_cam[..., 1:2] < 1.0) \
                     & (reference_points_cam[..., 0:1] < 1.0) \
                     & (reference_points_cam[..., 0:1] > 0.0))
-        bev_mask = np.nan_to_num(bev_mask)  # TODO: ops.nan_to_num doesn't support bool
+
+        bev_mask = bev_mask.astype(ms.float32)
+        bev_mask = ops.nan_to_num(bev_mask)  # TODO: ops.nan_to_num doesn't support bool
 
         reference_points_cam = reference_points_cam.permute(2, 1, 3, 0, 4)
         bev_mask = bev_mask.permute(2, 1, 3, 0, 4).squeeze(-1)
@@ -133,7 +135,10 @@ class BEVFormerEncoder(TransformerLayerSequence):
                   valid_ratios=None,
                   prev_bev=None,
                   shift=0.,
-                  img_metas=None):
+                  img_metas=None,
+                  indexes=None,
+                  reference_points_cam=None,
+                  bev_mask=None):
         """Forward function for `TransformerDecoder`.
         Args:
             bev_query (Tensor): Input BEV query with shape
@@ -155,13 +160,13 @@ class BEVFormerEncoder(TransformerLayerSequence):
         output = bev_query
         intermediate = []
 
-        ref_3d = self.get_reference_points(
-            bev_h, bev_w, self.pc_range[5] - self.pc_range[2], self.num_points_in_pillar, dim='3d',
-            bs=bev_query.shape[1], dtype=bev_query.dtype)
+        # ref_3d = self.get_reference_points(
+        #     bev_h, bev_w, self.pc_range[5] - self.pc_range[2], self.num_points_in_pillar, dim='3d',
+        #     bs=bev_query.shape[1], dtype=bev_query.dtype)
         ref_2d = self.get_reference_points(
             bev_h, bev_w, dim='2d', bs=bev_query.shape[1], dtype=bev_query.dtype)
-        reference_points_cam, bev_mask = self.point_sampling(
-            ref_3d, self.pc_range, img_metas)
+        # reference_points_cam, bev_mask = self.point_sampling(
+        #     ref_3d, self.pc_range, img_metas)
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
         shift_ref_2d = ref_2d.copy()
@@ -189,7 +194,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 value,
                 bev_pos,
                 hybird_ref_2d,
-                ref_3d,
                 bev_h,
                 bev_w,
                 spatial_shapes,
@@ -197,7 +201,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 reference_points_cam,
                 bev_mask,
                 prev_bev,
-                img_metas)
+                img_metas,
+                indexes)
             bev_query = output
             if self.return_intermediate:
                 intermediate.append(output)
@@ -258,7 +263,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                   value=None,
                   bev_pos=None,
                   ref_2d=None,
-                  ref_3d=None,
                   bev_h=None,
                   bev_w=None,
                   spatial_shapes=None,
@@ -267,6 +271,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                   bev_mask=None,
                   prev_bev=None,
                   img_metas=None,
+                  indexes=None,
                   mask=None,
                   query_pos=None,
                   key_pos=None,
@@ -353,17 +358,17 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     key,
                     value,
                     identity if self.pre_norm else None,
-                    query_pos=query_pos,
-                    key_pos=key_pos,
-                    reference_points=ref_3d,
-                    reference_points_cam=reference_points_cam,
-                    mask=mask,
-                    attn_mask=attn_masks[attn_index],
-                    key_padding_mask=key_padding_mask,
-                    spatial_shapes=spatial_shapes,
-                    level_start_index=level_start_index,
-                    bev_mask=bev_mask,
-                    img_metas=img_metas)
+                    query_pos,
+                    key_padding_mask,
+                    spatial_shapes,
+                    reference_points_cam,
+                    bev_mask,
+                    level_start_index,
+                    key_pos,
+                    mask,
+                    attn_masks[attn_index],
+                    img_metas,
+                    indexes)
                 attn_index += 1
                 identity = query
 

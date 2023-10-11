@@ -222,7 +222,10 @@ train: #  ema: True
     bev_size: &bev_size [50, 50]
     queue_length: &queue_length 3
     box_type_3d: LiDAR
-    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img', 'grid_mask_img' ]
+    bs: 1
+    pc_range: *point_cloud_range
+    num_points_in_pillar: 4
+    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img', 'grid_mask_img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift']
 #    net_input_column_index: [ 0 ] # input indices for network forward func in output_columns
 
   loader:

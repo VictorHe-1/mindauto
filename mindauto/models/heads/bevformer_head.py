@@ -119,7 +119,16 @@ class BEVFormerHead(DETRHead):
             for m in self.cls_branches:
                 m[-1].bias.set_data(init.initializer(bias_init, m[-1].bias.shape, m[-1].bias.dtype))
 
-    def construct(self, mlvl_feats, img_metas, prev_bev=None, only_bev=False):
+    def construct(self,
+                  mlvl_feats,
+                  img_metas,
+                  prev_bev=None,
+                  indexes=None,
+                  reference_points_cam=None,
+                  bev_mask=None,
+                  shift=None,
+                  only_bev=False,
+                  ):
         """Forward function.
         Args:
             mlvl_feats (tuple[Tensor]): Features from the upstream
@@ -153,6 +162,10 @@ class BEVFormerHead(DETRHead):
                 bev_pos=bev_pos,
                 img_metas=img_metas,
                 prev_bev=prev_bev,
+                indexes=indexes,
+                reference_points_cam=reference_points_cam,
+                bev_mask=bev_mask,
+                shift=shift
             )
         else:
             outputs = self.transformer(
@@ -166,8 +179,12 @@ class BEVFormerHead(DETRHead):
                 bev_pos=bev_pos,
                 reg_branches=self.reg_branches if self.with_box_refine else None,  # noqa:E501
                 cls_branches=self.cls_branches if self.as_two_stage else None,
+                prev_bev=prev_bev,
                 img_metas=img_metas,
-                prev_bev=prev_bev
+                indexes=indexes,
+                reference_points_cam=reference_points_cam,
+                bev_mask=bev_mask,
+                shift=shift
             )
         # init reference no diff
         # inter_references abs diff: 0.001
