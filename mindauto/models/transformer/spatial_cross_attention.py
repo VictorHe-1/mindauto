@@ -334,19 +334,9 @@ class SpatialCrossAttention(nn.Cell):
         bs, num_query, _ = query.shape
 
         D = reference_points_cam.shape[3]
-        # for graph mode: we cannot use the following codes:
-        # indexes = []
-        # for i, mask_per_img in enumerate(bev_mask):
-        #     index_query_per_img = mask_per_img[0].sum(axis=-1).astype(ms.int32).nonzero().squeeze(-1)
-        #     indexes.append(index_query_per_img)
-        # max_len = max([len(each) for each in indexes])
         max_len = 2500  # bev_h * bev_w
 
         # each camera only interacts with its corresponding BEV queries. This step can greatly save GPU memory.
-        # queries_rebatch = query.new_zeros(
-        #     [bs, self.num_cams, max_len, self.embed_dims])
-        # reference_points_rebatch = reference_points_cam.new_zeros(
-        #     [bs, self.num_cams, max_len, D, 2])
         queries_rebatch_bs = []
         reference_points_rebatch_bs = []
         for i, reference_points_per_img in enumerate(reference_points_cam):
@@ -356,9 +346,8 @@ class SpatialCrossAttention(nn.Cell):
                 ops.matmul(index_query_per_img, reference_points_per_img[0].reshape(max_len, D * 2)).reshape(max_len, D,
                                                                                                              2)
             )
-        queries_rebatch = ops.stack(queries_rebatch_bs).unsqueeze(1)
-        reference_points_rebatch = ops.stack(reference_points_rebatch_bs).unsqueeze(1)
-
+        queries_rebatch = ops.expand_dims(ops.stack(queries_rebatch_bs), 0)  # [bs, self.num_cams, max_len, self.embed_dims]
+        reference_points_rebatch = ops.expand_dims(ops.stack(reference_points_rebatch_bs), 0)  # [bs, self.num_cams, max_len, D, 2]
         num_cams, l, bs, embed_dims = key.shape
 
         key = key.permute(2, 0, 1, 3).reshape(
