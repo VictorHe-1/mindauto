@@ -28,7 +28,6 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     Returns:
         Tensor: has shape (bs, num_queries, embed_dims)
     """
-
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, num_heads, num_levels, num_points, _ = \
         sampling_locations.shape
@@ -44,7 +43,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
         # bs, num_heads*embed_dims, H_*W_ ->
         # bs*num_heads, embed_dims, H_, W_
         value_l_ = ops.swapaxes(ops.flatten(value_list[level], start_dim=2), 1, 2).reshape(
-            bs * num_heads, embed_dims, H_, W_)
+            bs * num_heads, embed_dims, 50, 50)  # H_: 50 W_: 50
         # bs, num_queries, num_heads, num_points, 2 ->
         # bs, num_heads, num_queries, num_points, 2 ->
         # bs*num_heads, num_queries, num_points, 2
