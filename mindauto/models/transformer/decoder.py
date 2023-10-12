@@ -56,7 +56,7 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
         output = query
         intermediate = []
         intermediate_reference_points = []
-        for lid, layer in enumerate(self.layers):
+        for lid, layer in enumerate(self.layers):  # DetrTransformerDecoderLayer
             reference_points_input = reference_points[..., :2].unsqueeze(
                 2)  # BS NUM_QUERY NUM_LEVEL 2
             output = layer(
@@ -206,6 +206,7 @@ class CustomMSDeformableAttention(nn.Cell):
                   reference_points=None,
                   spatial_shapes=None,
                   level_start_index=None,
+                  img_metas=None,
                   flag='decoder'):
         """Forward Function of MultiScaleDeformAttention.
 

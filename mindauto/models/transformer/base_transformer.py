@@ -290,7 +290,7 @@ class BaseTransformerLayer(nn.Cell):
         for layer in self.operation_order:
             if layer == 'self_attn':
                 temp_key = temp_value = query
-                query = self.attentions[attn_index](
+                query = self.attentions[attn_index](  # MultiheadAttention
                     query,
                     temp_key,
                     temp_value,
@@ -299,6 +299,11 @@ class BaseTransformerLayer(nn.Cell):
                     key_pos=query_pos,
                     attn_mask=attn_masks[attn_index],
                     key_padding_mask=query_key_padding_mask,
+                    reference_points=reference_points,
+                    cls_branches=cls_branches,
+                    spatial_shapes=spatial_shapes,
+                    level_start_index=level_start_index,
+                    img_metas=img_metas,
                 )
                 attn_index += 1
                 identity = query
@@ -307,7 +312,7 @@ class BaseTransformerLayer(nn.Cell):
                 query = self.norms[norm_index](query)
                 norm_index += 1
 
-            elif layer == 'cross_attn':
+            elif layer == 'cross_attn':  # CustomMSDeformableAttention
                 query = self.attentions[attn_index](
                     query,
                     key,
@@ -316,7 +321,11 @@ class BaseTransformerLayer(nn.Cell):
                     query_pos=query_pos,
                     key_pos=key_pos,
                     attn_mask=attn_masks[attn_index],
-                    key_padding_mask=key_padding_mask
+                    key_padding_mask=key_padding_mask,
+                    reference_points=reference_points,
+                    spatial_shapes=spatial_shapes,
+                    level_start_index=level_start_index,
+                    img_metas=img_metas
                 )
                 attn_index += 1
                 identity = query
