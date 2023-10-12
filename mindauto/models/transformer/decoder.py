@@ -275,9 +275,8 @@ class CustomMSDeformableAttention(nn.Cell):
                                                    self.num_levels,
                                                    self.num_points)
         if reference_points.shape[-1] == 2:
-            offset_normalizer = np.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1)
-            offset_normalizer = ms.Tensor(offset_normalizer, dtype=ms.float32)
+            offset_normalizer = ops.stack(
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
             sampling_locations = reference_points[:, :, None, :, None, :] \
                                  + sampling_offsets \
                                  / offset_normalizer[None, None, None, :, None, :]
