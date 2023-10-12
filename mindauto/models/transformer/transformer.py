@@ -434,7 +434,7 @@ class PerceptionTransformer(nn.Cell):
                     tmp_prev_bev = prev_bev[:, i].reshape(
                         bev_h, bev_w, -1).permute(2, 0, 1)
                     # Warning: this rotation replace the original torchvision.transforms.functional.rotate
-                    rotate = Rotate(degrees=rotation_angle, center=tuple(self.rotate_center))
+                    rotate = Rotate(degrees=float(rotation_angle), center=tuple(self.rotate_center))
                     tmp_prev_bev = ms.Tensor(rotate(tmp_prev_bev.asnumpy()), dtype=ms.float32)
                     tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
                         bev_h * bev_w, 1, -1)
