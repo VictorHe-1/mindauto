@@ -182,7 +182,11 @@ class BEVFormer(MVXTwoStageDetector):
                           gt_labels_3d,
                           img_metas,
                           gt_bboxes_ignore=None,
-                          prev_bev=None):
+                          prev_bev=None,
+                          indexes=None,
+                          reference_points_cam=None,
+                          bev_mask=None,
+                          shift=None):
         """Forward function'
         Args:
             pts_feats (list[mindspore.Tensor]): Features of point cloud branch
@@ -198,7 +202,7 @@ class BEVFormer(MVXTwoStageDetector):
             dict: Losses of each branch.
         """
         outs = self.pts_bbox_head(
-            pts_feats, img_metas, prev_bev)
+            pts_feats, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift)
         loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
         losses = self.pts_bbox_head.loss(*loss_inputs, img_metas=img_metas)
         return losses
@@ -326,13 +330,27 @@ class BEVFormer(MVXTwoStageDetector):
             img_feats = self.extract_feat(img=img, img_metas=img_metas)
         losses = dict()
         if not img_metas[0]['prev_bev_exists']:
-            losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
-                                                gt_labels_3d, img_metas,
-                                                gt_bboxes_ignore, None)
+            losses_pts = self.forward_pts_train(img_feats,
+                                                gt_bboxes_3d,
+                                                gt_labels_3d,
+                                                img_metas,
+                                                gt_bboxes_ignore,
+                                                None,
+                                                indexes[-1],
+                                                reference_points_cam[-1],
+                                                bev_mask[-1],
+                                                shift[-1])
         else:
-            losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
-                                                gt_labels_3d, img_metas,
-                                                gt_bboxes_ignore, prev_bev)
+            losses_pts = self.forward_pts_train(img_feats,
+                                                gt_bboxes_3d,
+                                                gt_labels_3d,
+                                                img_metas,
+                                                gt_bboxes_ignore,
+                                                prev_bev,
+                                                indexes[-1],
+                                                reference_points_cam[-1],
+                                                bev_mask[-1],
+                                                shift[-1])
         losses.update(losses_pts)
         total_loss = ms.Tensor(0.0)
         for _, each_loss in losses.items():
