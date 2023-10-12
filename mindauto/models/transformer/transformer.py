@@ -423,23 +423,24 @@ class PerceptionTransformer(nn.Cell):
         bev_pos = ops.flatten(bev_pos, start_dim=2).permute(2, 0, 1)
 
         # obtain rotation angle and shift with ego motion
-        concat = ops.Concat(axis=1)
-        if prev_bev is not None:
-            if prev_bev.shape[1] == bev_h * bev_w:
-                prev_bev = prev_bev.permute(1, 0, 2)
-            if self.rotate_prev_bev:
-                for i in range(bs):
-                    # num_prev_bev = prev_bev.size(1)
-                    rotation_angle = img_metas[i]['can_bus'][-1]
-                    tmp_prev_bev = prev_bev[:, i].reshape(
-                        bev_h, bev_w, -1).permute(2, 0, 1)
-                    # Warning: this rotation replace the original torchvision.transforms.functional.rotate
-                    rotate = Rotate(degrees=float(rotation_angle), center=tuple(self.rotate_center))
-                    tmp_prev_bev = ms.Tensor(rotate(tmp_prev_bev.asnumpy()), dtype=ms.float32)
-                    tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
-                        bev_h * bev_w, 1, -1)
-                    # prev_bev[:, i] = tmp_prev_bev[:, 0]
-                    prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))
+        prev_bev = prev_bev.permute(1, 0, 2)
+        # graph mode doesn't support the following codes:
+        # if prev_bev is not None:
+        #     if prev_bev.shape[1] == bev_h * bev_w:  # this op cause dynamic shape in graph mode
+        #         prev_bev = prev_bev.permute(1, 0, 2)
+        #     if self.rotate_prev_bev:
+        #         concat = ops.Concat(axis=1)
+        #         for i in range(bs):
+        #             # num_prev_bev = prev_bev.size(1)
+        #             rotation_angle = img_metas[i]['can_bus'][-1]
+        #             tmp_prev_bev = prev_bev[:, i].reshape(
+        #                 bev_h, bev_w, -1).permute(2, 0, 1)
+        #             # Warning: this rotation replace the original torchvision.transforms.functional.rotate
+        #             rotate = Rotate(degrees=float(rotation_angle), center=tuple(self.rotate_center))
+        #             tmp_prev_bev = ms.Tensor(rotate(tmp_prev_bev.asnumpy()), dtype=ms.float32)
+        #             tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
+        #                 bev_h * bev_w, 1, -1)
+        #             prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))  # prev_bev[:, i] = tmp_prev_bev[:, 0]
 
         # add can bus signals
         can_bus = ops.stack([each['can_bus'] for each in img_metas], 0)

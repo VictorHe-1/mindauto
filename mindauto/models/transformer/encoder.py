@@ -175,7 +175,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         bev_query = bev_query.permute(1, 0, 2)
         bev_pos = bev_pos.permute(1, 0, 2)
         bs, len_bev, num_bev_level, _ = ref_2d.shape
-        if prev_bev is not None:
+        if prev_bev.sum() != 0:  # prev_bev is not None
             prev_bev = prev_bev.permute(1, 0, 2).astype(ms.float32)
             prev_bev = ops.stack([prev_bev, bev_query], 1).reshape(bs * 2, len_bev, -1)
             hybird_ref_2d = ops.stack([shift_ref_2d, ref_2d], 1).reshape(

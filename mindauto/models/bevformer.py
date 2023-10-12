@@ -245,16 +245,15 @@ class BEVFormer(MVXTwoStageDetector):
     def obtain_history_bev(self, imgs_queue, img_metas_list, indexes, reference_points_cam, bev_mask, shift):
         """Obtain history BEV features iteratively. To save GPU memory, gradients are not calculated.
         """
-        prev_bev = None
+        prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # [bs, bev_h*bev_w,embed_dim]
         bs, len_queue, num_cams, C, H, W = imgs_queue.shape
         imgs_queue = imgs_queue.reshape(bs * len_queue, num_cams, C, H, W)
         img_feats_list = self.extract_feat(img=imgs_queue, len_queue=len_queue)
         ops.stop_gradient(img_feats_list[0])
         for i in range(len_queue):
             img_metas = [each[i] for each in img_metas_list]
-            if not img_metas[0]['prev_bev_exists']:
-                prev_bev = None
-            # img_feats = self.extract_feat(img=img, img_metas=img_metas)
+            # if not img_metas[0]['prev_bev_exists']:
+            #     prev_bev = ops.zeros((1, 2500, 256), ms.float32)
             img_feats = [each_scale[:, i] for each_scale in img_feats_list]
             prev_bev = self.pts_bbox_head(
                 img_feats, img_metas, prev_bev, indexes[i], reference_points_cam[i], bev_mask[i], shift[i], only_bev=True)
@@ -335,7 +334,7 @@ class BEVFormer(MVXTwoStageDetector):
                                                 gt_labels_3d,
                                                 img_metas,
                                                 gt_bboxes_ignore,
-                                                None,
+                                                ops.zeros((1, 2500, 256), ms.float32),
                                                 indexes[-1],
                                                 reference_points_cam[-1],
                                                 bev_mask[-1],

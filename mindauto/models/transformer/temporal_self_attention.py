@@ -155,7 +155,7 @@ class TemporalSelfAttention(nn.Cell):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-        if value is None:
+        if value.sum() == 0:
             assert self.batch_first
             bs, len_bev, c = query.shape
             value = ops.stack([query, query], 1).reshape(bs * 2, len_bev, c)

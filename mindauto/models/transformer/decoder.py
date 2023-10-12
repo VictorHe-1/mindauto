@@ -34,8 +34,8 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
                   cls_branches=None,
                   spatial_shapes=None,
                   level_start_index=None,
-                  key_padding_mask=None,
-                  img_metas=None):
+                  img_metas=None,
+                  key_padding_mask=None):
         """Forward function for `Detr3DTransformerDecoder`.
         Args:
             query (Tensor): Input query with shape
