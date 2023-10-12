@@ -157,15 +157,14 @@ class BEVFormerHead(DETRHead):
                 bev_queries,
                 self.bev_h,
                 self.bev_w,
-                grid_length=(self.real_h / self.bev_h,
-                             self.real_w / self.bev_w),
-                bev_pos=bev_pos,
-                prev_bev=prev_bev,
-                img_metas=img_metas,
-                indexes=indexes,
-                reference_points_cam=reference_points_cam,
-                bev_mask=bev_mask,
-                shift=shift
+                (self.real_h / self.bev_h, self.real_w / self.bev_w),
+                bev_pos,
+                prev_bev,
+                img_metas,
+                indexes,
+                reference_points_cam,
+                bev_mask,
+                shift
             )
         else:
             outputs = self.transformer(
