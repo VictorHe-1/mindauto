@@ -91,8 +91,8 @@ def restore_img_metas_for_test(kwargs, new_args):
 
 @ms.jit
 def restore_3d_bbox(kwargs):
-    tensor = kwargs[2].squeeze(0)
-    gravity_center = kwargs[3].squeeze(0)
+    tensor = kwargs[8].squeeze(0)
+    gravity_center = kwargs[9].squeeze(0)
     lidar_inst = {'gravity_center': gravity_center, 'tensor': tensor}
     return lidar_inst
 
