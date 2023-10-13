@@ -577,7 +577,7 @@ class PerceptionTransformer(nn.Cell):
             reference_points=reference_points,
             reg_branches=reg_branches,
             cls_branches=cls_branches,
-            spatial_shapes=ms.Tensor([[bev_h, bev_w]], dtype=ms.int32),
+            spatial_shapes=[[bev_h, bev_w]],
             level_start_index=ms.Tensor([0], dtype=ms.float32),
             img_metas=img_metas)
         inter_references_out = inter_references

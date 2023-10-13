@@ -1,7 +1,6 @@
 import math
 import warnings
 
-import numpy as np
 import mindspore as ms
 from mindspore import ops, nn
 
@@ -258,7 +257,9 @@ class CustomMSDeformableAttention(nn.Cell):
 
         bs, num_query, _ = query.shape
         bs, num_value, _ = value.shape
-        assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
+        spatial_shapes_tensor = ms.Tensor(spatial_shapes, dtype=ms.float32)
+        result = sum(shape[0] * shape[1] for shape in spatial_shapes)
+        assert result == num_value
 
         value = self.value_proj(value)
         if key_padding_mask is not None:
@@ -276,7 +277,7 @@ class CustomMSDeformableAttention(nn.Cell):
                                                    self.num_points)
         if reference_points.shape[-1] == 2:
             offset_normalizer = ops.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], axis=-1).astype(ms.float32)
+                [spatial_shapes_tensor[..., 1], spatial_shapes_tensor[..., 0]], axis=-1).astype(ms.float32)
             sampling_locations = reference_points[:, :, None, :, None, :] \
                                  + sampling_offsets \
                                  / offset_normalizer[None, None, None, :, None, :]
