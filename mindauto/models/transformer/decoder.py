@@ -82,7 +82,7 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
                 new_reference_points[..., 2:3] = tmp[
                                                  ..., 4:5] + inverse_sigmoid(reference_points[..., 2:3])
 
-                new_reference_points = new_reference_points.sigmoid()
+                new_reference_points = ops.sigmoid(new_reference_points)
 
                 # reference_points = new_reference_points.detach()
                 reference_points = ops.stop_gradient(new_reference_points)

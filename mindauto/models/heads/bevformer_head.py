@@ -8,7 +8,6 @@ from mindspore.communication.management import GlobalComm
 
 from mindauto.core.bbox.coders import build_bbox_coder
 from mindauto.models.transformer import inverse_sigmoid
-from mindauto.core.utils import multi_apply
 from mindauto.core.bbox.util import normalize_bbox
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
 from .detr_head import DETRHead
@@ -210,8 +209,8 @@ class BEVFormerHead(DETRHead):
             reference_part2 = reference[..., 2:3]
             tmp_part1 = tmp_part1 + reference_part1
             tmp_part2 = tmp_part2 + reference_part2
-            tmp_part1 = tmp_part1.sigmoid()
-            tmp_part2 = tmp_part2.sigmoid()
+            tmp_part1 = ops.sigmoid(tmp_part1)
+            tmp_part2 = ops.sigmoid(tmp_part2)
             new_tmp_part1 = (tmp_part1[..., 0:1] * (self.pc_range[3] -
                                                      self.pc_range[0]) + self.pc_range[0])
 
@@ -336,10 +335,23 @@ class BEVFormerHead(DETRHead):
             gt_bboxes_ignore_list for _ in range(num_imgs)
         ]
 
-        (labels_list, label_weights_list, bbox_targets_list,
-         bbox_weights_list, pos_inds_list, neg_inds_list) = multi_apply(
-            self._get_target_single, cls_scores_list, bbox_preds_list,
-            gt_labels_list, gt_bboxes_list, gt_bboxes_ignore_list)
+        labels_list = []
+        label_weights_list = []
+        bbox_targets_list = []
+        bbox_weights_list = []
+        pos_inds_list = []
+        neg_inds_list = []
+
+        for i in range(len(cls_scores_list)):
+            labels, label_weights, bbox_targets, bbox_weights, pos_inds, neg_inds = self._get_target_single(
+                cls_scores_list[i], bbox_preds_list[i], gt_labels_list[i], gt_bboxes_list[i], gt_bboxes_ignore_list[i])
+            labels_list.append(labels)
+            label_weights_list.append(label_weights)
+            bbox_targets_list.append(bbox_targets)
+            bbox_weights_list.append(bbox_weights)
+            pos_inds_list.append(pos_inds)
+            neg_inds_list.append(neg_inds)
+
         num_total_pos = sum((np.array(inds).size for inds in pos_inds_list))
         num_total_neg = sum((np.array(inds).size for inds in neg_inds_list))
         return (labels_list, label_weights_list, bbox_targets_list,
@@ -469,10 +481,16 @@ class BEVFormerHead(DETRHead):
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
 
-        losses_cls, losses_bbox = multi_apply(
-            self.loss_single, all_cls_scores, all_bbox_preds,
-            all_gt_bboxes_list, all_gt_labels_list,
-            all_gt_bboxes_ignore_list)
+        losses_cls = []
+        losses_bbox = []
+        for i in range(len(all_gt_bboxes_list)):
+            loss_cls, loss_bbox = self.loss_single(all_cls_scores[i],
+                                                   all_bbox_preds[i],
+                                                   all_gt_bboxes_list[i],
+                                                   all_gt_labels_list[i],
+                                                   all_gt_bboxes_ignore_list[i])
+            losses_cls.append(loss_cls)
+            losses_bbox.append(loss_bbox)
 
         loss_dict = dict()
         # loss of proposal generated from encode feature map.

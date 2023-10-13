@@ -563,7 +563,7 @@ class PerceptionTransformer(nn.Cell):
         query_pos = query_pos.unsqueeze(0).broadcast_to((bs, -1, -1))
         query = query.unsqueeze(0).broadcast_to((bs, -1, -1))
         reference_points = self.reference_points(query_pos)
-        reference_points = reference_points.sigmoid()
+        reference_points = ops.sigmoid(reference_points)
         init_reference_out = reference_points
 
         query = query.permute(1, 0, 2)
