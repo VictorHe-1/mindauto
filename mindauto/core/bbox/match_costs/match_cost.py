@@ -47,7 +47,8 @@ class FocalLossCost:
                 1 - self.alpha) * cls_pred.pow(self.gamma)
         pos_cost = -(cls_pred + self.eps).log() * self.alpha * (
                 1 - cls_pred).pow(self.gamma)
-        cls_cost = pos_cost[:, gt_labels.tolist()] - neg_cost[:, gt_labels.tolist()]
+        # cls_cost = pos_cost[:, gt_labels.tolist()] - neg_cost[:, gt_labels.tolist()]
+        cls_cost = ops.gather(pos_cost, gt_labels, axis=1) - ops.gather(neg_cost, gt_labels, axis=1)
         return cls_cost * self.weight
 
 
