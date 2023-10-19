@@ -98,6 +98,7 @@ class HungarianAssigner3D(nn.Cell):
         # 2. compute the weighted costs
         # classification and bboxcost.
         # cls_cost: FocalLossCost
+        # cls_pred: [900, 10] gt_labels [350]
         cls_cost = self.cls_cost(cls_pred, gt_labels)  # [900, 350]
         # regression L1 cost
         # normalized_gt_bboxes: [350, 10] [padding_dim, 10]
@@ -110,6 +111,8 @@ class HungarianAssigner3D(nn.Cell):
 
         # 3. do Hungarian matching on CPU using linear_sum_assignment
         matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
+        matched_row_inds = ops.stop_gradient(matched_row_inds)
+        matched_col_inds = ops.stop_gradient(matched_col_inds)
         # 4. Get matched bbox_targets and labels
 
         # Note: matched_col_inds may contain -1
