@@ -1,3 +1,6 @@
+from mindspore import ops
+
+
 def reduce_loss(loss, reduction):
     """Reduce loss as specified.
 
@@ -31,7 +34,9 @@ def weight_reduce_loss(loss, weight=None, reduction='mean', avg_factor=None):
     """
     # if weight is specified, apply element-wise weight
     if weight is not None:
-        loss = loss * weight
+        tile_times = loss.shape[1]
+        new_weight = ops.tile(weight, (tile_times, 1)).transpose()
+        loss = loss * new_weight
 
     # if avg_factor is not specified, just reduce the loss
     if avg_factor is None:

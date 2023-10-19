@@ -203,7 +203,7 @@ train: #  ema: True
           classes: *class_names
       - PadLabel:
           padding_size: 350
-          padding_value: -1
+          padding_value: 0  # padding value must be in range [0, 9]
       - NormalizeMultiviewImage: *img_norm_cfg
       - RandomScaleImageMultiViewImage:
           scales: [0.5]
@@ -212,7 +212,7 @@ train: #  ema: True
       - DefaultFormatBundle3D:
           class_names: *class_names
       - CustomCollect3D:
-          keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img']
+          keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img', 'gt_labels_mask']
     #  the order of the dataloader list, matching the network input and the input labels for the loss function, and optional data for debug/visualize
     use_grid_mask: True
     classes: *class_names
@@ -225,7 +225,7 @@ train: #  ema: True
     bs: 1
     pc_range: *point_cloud_range
     num_points_in_pillar: 4
-    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img', 'grid_mask_img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift']
+    output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img', 'gt_labels_mask', 'grid_mask_img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift']
 #    net_input_column_index: [ 0 ] # input indices for network forward func in output_columns
 
   loader:

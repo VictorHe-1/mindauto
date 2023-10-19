@@ -317,6 +317,7 @@ class CustomNuScenesDataset(NuScenesDataset):
 
     def union2one(self, queue):
         imgs_list = [each['img'] for each in queue]
+        gt_mask_list = [each['gt_labels_mask'] for each in queue]
         grid_imgs_list = [each['grid_mask_img'] for each in queue]
         max_len_list = [each['max_len'] for each in queue]
         indexes_list = [each['indexes'] for each in queue]
@@ -345,6 +346,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
         queue[-1]['img'] = np.stack(imgs_list)
+        queue[-1]['gt_labels_mask'] = np.stack(gt_mask_list)
         queue[-1]['grid_mask_img'] = np.stack(grid_imgs_list)
         queue[-1]['img_metas'] = metas_map
         queue[-1]['max_len'] = np.stack(max_len_list)
@@ -441,7 +443,7 @@ class CustomNuScenesDataset(NuScenesDataset):
     # ms.GeneratorDataset must have (numpy.ndarray, ...)
     def convert_data_to_numpy(self, data):
         # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
-        ordered_key = ['gt_labels_3d', 'img', 'grid_mask_img', 'max_len',
+        ordered_key = ['gt_labels_3d', 'img', 'gt_labels_mask', 'grid_mask_img', 'max_len',
                        'indexes', 'reference_points_cam', 'bev_mask', 'shift']
         data['gt_labels_3d'] = data['gt_labels_3d'].astype(np.int32)
         # convert gt_bboxes_3d (LiDARInstance3D) to numpy array

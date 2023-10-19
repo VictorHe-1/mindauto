@@ -1,9 +1,9 @@
-from mindspore import ops
+from mindspore import ops, nn
 
 from .iou2d_calculator import bbox_overlaps
 
 
-class FocalLossCost:
+class FocalLossCost(nn.Cell):
     """FocalLossCost.
 
      Args:
@@ -27,12 +27,13 @@ class FocalLossCost:
     """
 
     def __init__(self, weight=1., alpha=0.25, gamma=2, eps=1e-12):
+        super().__init__()
         self.weight = weight
         self.alpha = alpha
         self.gamma = gamma
         self.eps = eps
 
-    def __call__(self, cls_pred, gt_labels):
+    def construct(self, cls_pred, gt_labels):
         """
         Args:
             cls_pred (Tensor): Predicted classification logits, shape
@@ -42,7 +43,7 @@ class FocalLossCost:
         Returns:
             torch.Tensor: cls_cost value with weight
         """
-        cls_pred = cls_pred.sigmoid()
+        cls_pred = ops.sigmoid(cls_pred)
         neg_cost = -(1 - cls_pred + self.eps).log() * (
                 1 - self.alpha) * cls_pred.pow(self.gamma)
         pos_cost = -(cls_pred + self.eps).log() * self.alpha * (
@@ -93,16 +94,17 @@ class IoUCost:
         return iou_cost * self.weight
 
 
-class BBox3DL1Cost(object):
+class BBox3DL1Cost(nn.Cell):
     """BBox3DL1Cost.
      Args:
          weight (int | float, optional): loss_weight
     """
 
     def __init__(self, weight=1.):
+        super().__init__()
         self.weight = weight
 
-    def __call__(self, bbox_pred, gt_bboxes):
+    def construct(self, bbox_pred, gt_bboxes):
         """
         Args:
             bbox_pred (Tensor): Predicted boxes with normalized coordinates

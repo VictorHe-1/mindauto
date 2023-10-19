@@ -46,7 +46,7 @@ class NMSFreeCoder(BaseBBoxCoder):
             list[dict]: Decoded boxes.
         """
         max_num = self.max_num
-        cls_scores = cls_scores.sigmoid()
+        cls_scores = ops.sigmoid(cls_scores)
         topk = ops.TopK(sorted=True)
         topk.set_device(device_target='CPU')
         scores, indexs = topk(cls_scores.view(-1), max_num)

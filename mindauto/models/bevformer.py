@@ -37,11 +37,11 @@ def restore_img_metas(kwargs):
     }
     img_meta_dict = {}
     for i, value in enumerate(kwargs[:-1]):
-        if i < 10:
+        if i < 11:
             continue
         else:
-            new_i = (i - 10) % 6
-            middle_key = (i - 10) // 6
+            new_i = (i - 11) % 6
+            middle_key = (i - 11) // 6
             last_key = key_mapping[new_i]
             if middle_key not in img_meta_dict:
                 img_meta_dict[middle_key] = {}
@@ -91,8 +91,8 @@ def restore_img_metas_for_test(kwargs, new_args):
 
 @ms.jit
 def restore_3d_bbox(kwargs):
-    tensor = kwargs[8].squeeze(0)
-    gravity_center = kwargs[9].squeeze(0)
+    tensor = kwargs[9].squeeze(0)
+    gravity_center = kwargs[10].squeeze(0)
     lidar_inst = {'gravity_center': gravity_center, 'tensor': tensor}
     return lidar_inst
 
@@ -150,10 +150,11 @@ class BEVFormer(MVXTwoStageDetector):
             elif img.ndim == 5 and img.shape[0] > 1:
                 B, N, C, H, W = img.shape
                 img = img.reshape(B * N, C, H, W)
-            # grid mask move to dataset prepare_train_data
-            # if self.use_grid_mask:
-            #     img = self.grid_mask(img)
             img_feats = self.img_backbone(img)  # mean abs diff 0.02
+            # if len_queue == 2:
+            #     img_feats = (ms.Tensor(np.random.random((12, 2048, 15, 25)), ms.float32), )
+            # else:
+            #     img_feats = (ms.Tensor(np.random.random((6, 2048, 15, 25)), ms.float32),)
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
         else:
@@ -186,7 +187,8 @@ class BEVFormer(MVXTwoStageDetector):
                           indexes=None,
                           reference_points_cam=None,
                           bev_mask=None,
-                          shift=None):
+                          shift=None,
+                          gt_labels_mask=None):
         """Forward function'
         Args:
             pts_feats (list[mindspore.Tensor]): Features of point cloud branch
@@ -204,7 +206,7 @@ class BEVFormer(MVXTwoStageDetector):
         outs = self.pts_bbox_head(
             pts_feats, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift)
         loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
-        losses = self.pts_bbox_head.loss(*loss_inputs, img_metas=img_metas)
+        losses = self.pts_bbox_head.loss(*loss_inputs, img_metas=img_metas, gt_labels_mask=gt_labels_mask)
         return losses
 
     def forward_dummy(self, img):
@@ -228,14 +230,15 @@ class BEVFormer(MVXTwoStageDetector):
             img_meta_dict = restore_img_metas(args)
             lidar_inst = restore_3d_bbox(args)
             new_args['img'] = args[:-1][1]
-            new_args['grid_mask_img'] = args[:-1][2]
+            new_args['gt_labels_mask'] = args[2][0]
+            new_args['grid_mask_img'] = args[:-1][3]
             new_args['img_metas'] = [img_meta_dict]
             new_args['gt_labels_3d'] = [args[:-1][0].squeeze(0)]
             new_args['gt_bboxes_3d'] = [lidar_inst]
-            new_args['indexes'] = args[4][0]
-            new_args['reference_points_cam'] = args[5][0]
-            new_args['bev_mask'] = args[6][0]
-            new_args['shift'] = args[7][0]
+            new_args['indexes'] = args[5][0]
+            new_args['reference_points_cam'] = args[6][0]
+            new_args['bev_mask'] = args[7][0]
+            new_args['shift'] = args[8][0]
             return self.forward_train(**new_args)
         else:
             new_args['rescale'] = True
@@ -268,6 +271,7 @@ class BEVFormer(MVXTwoStageDetector):
                       gt_labels=None,
                       gt_bboxes=None,
                       img=None,
+                      gt_labels_mask=None,
                       grid_mask_img=None,
                       proposals=None,
                       gt_bboxes_ignore=None,
@@ -338,7 +342,8 @@ class BEVFormer(MVXTwoStageDetector):
                                                 indexes[-1],
                                                 reference_points_cam[-1],
                                                 bev_mask[-1],
-                                                shift[-1])
+                                                shift[-1],
+                                                gt_labels_mask[-1])
         else:
             losses_pts = self.forward_pts_train(img_feats,
                                                 gt_bboxes_3d,
@@ -349,12 +354,10 @@ class BEVFormer(MVXTwoStageDetector):
                                                 indexes[-1],
                                                 reference_points_cam[-1],
                                                 bev_mask[-1],
-                                                shift[-1])
+                                                shift[-1],
+                                                gt_labels_mask[-1])
         losses.update(losses_pts)
-        total_loss = ms.Tensor(0.0)
-        for _, each_loss in losses.items():
-            total_loss += each_loss
-        return total_loss
+        return sum(losses.values())
 
     def forward_test(self, img_metas, img=None, **kwargs):
         for var, name in [(img_metas, 'img_metas')]:

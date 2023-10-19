@@ -219,8 +219,10 @@ class PadLabel:
         gt_bboxes_input = input_dict['gt_bboxes_3d'].input_tensor
         bboxes_pad = np.full((self.padding_size, 9), self.padding_value, dtype=np.float32)
         gt_len = len(gt_labels_3d)
-        if self.padding_value in gt_labels_3d:
-            raise ValueError(f"Padding value {self.padding_value} in gt_labels_3d {gt_labels_3d}")
+        gt_label_mask = np.zeros(self.padding_size)
+        gt_label_mask[:gt_len] = 1
+        if self.padding_value not in gt_labels_3d:
+            raise ValueError(f"Padding value {self.padding_value} is not valid!")
         if gt_len:
             gt_labels_3d_pad[:min(gt_len, self.padding_size)] = gt_labels_3d[:min(gt_len, self.padding_size)]
             bboxes_pad[:min(gt_len, self.padding_size)] = gt_bboxes_input[:min(gt_len, self.padding_size)]
@@ -235,6 +237,7 @@ class PadLabel:
                                                           with_yaw=with_yaw,
                                                           origin=input_origin,
                                                           numpy_boxes=True)
+        input_dict['gt_labels_mask'] = gt_label_mask.astype(np.int32)
         return input_dict
 
     def __repr__(self):

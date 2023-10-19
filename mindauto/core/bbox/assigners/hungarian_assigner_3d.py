@@ -1,17 +1,17 @@
-import numpy as np
+import mindspore as ms
+from mindspore import ops, nn
 
-from .assign_result import AssignResult
-from .base_assigner import BaseAssigner
+from .run_lsa import NetLsap
 from mindauto.core.bbox.util import normalize_bbox
 from mindauto.core.bbox.match_costs import build_match_cost
 
-try:
-    from scipy.optimize import linear_sum_assignment
-except ImportError:
-    linear_sum_assignment = None
+# try:
+#     from scipy.optimize import linear_sum_assignment
+# except ImportError:
+#     linear_sum_assignment = None
 
 
-class HungarianAssigner3D(BaseAssigner):
+class HungarianAssigner3D(nn.Cell):
     """Computes one-to-one matching between predictions and ground truth.
     This class computes an assignment between the targets and the predictions
     based on the costs. The costs are weighted sum of three components:
@@ -41,18 +41,21 @@ class HungarianAssigner3D(BaseAssigner):
                  reg_cost=dict(type='BBoxL1Cost', weight=1.0),
                  iou_cost=dict(type='IoUCost', weight=0.0),
                  pc_range=None):
+        super().__init__()
         self.cls_cost = build_match_cost(cls_cost)
         self.reg_cost = build_match_cost(reg_cost)
         self.iou_cost = build_match_cost(iou_cost)
         self.pc_range = pc_range
+        self.lsap_nn = NetLsap()
 
-    def assign(self,
+    def construct(self,
                bbox_pred,
                cls_pred,
                gt_bboxes,
                gt_labels,
                gt_bboxes_ignore=None,
-               eps=1e-7):
+               gt_labels_mask=None,
+               ):
         """Computes one-to-one matching based on the weighted costs.
         This method assign each query prediction to a ground truth or
         background. The `assigned_gt_inds` with -1 means don't care,
@@ -83,42 +86,36 @@ class HungarianAssigner3D(BaseAssigner):
         """
         assert gt_bboxes_ignore is None, \
             'Only case when gt_bboxes_ignore is None is supported.'
-        num_gts, num_bboxes = gt_bboxes.shape[0], bbox_pred.shape[0]
-
         # 1. assign -1 by default
-        assigned_gt_inds = np.full((num_bboxes,), -1, dtype=np.int32)
-        assigned_labels = np.full((num_bboxes,), -1, dtype=np.int32)
-        if num_gts == 0 or num_bboxes == 0:
-            # No ground truth or boxes, return empty assignment
-            if num_gts == 0:
-                # No ground truth, assign all to background
-                assigned_gt_inds[:] = 0
-            return AssignResult(
-                num_gts, assigned_gt_inds, None, labels=assigned_labels)
-
+        # assigned_labels = ops.full((num_bboxes,), -1, dtype=ms.int32)
+        # if num_gts == 0 or num_bboxes == 0:
+        #     # No ground truth or boxes, return empty assignment
+        #     if num_gts == 0:
+        #         # No ground truth, assign all to background
+        #         assigned_gt_inds[:] = 0
+        #     return AssignResult(
+        #         num_gts, assigned_gt_inds, None, labels=assigned_labels)
         # 2. compute the weighted costs
         # classification and bboxcost.
-        cls_cost = self.cls_cost(cls_pred, gt_labels)
+        # cls_cost: FocalLossCost
+        cls_cost = self.cls_cost(cls_pred, gt_labels)  # [900, 350]
         # regression L1 cost
-
+        # normalized_gt_bboxes: [350, 10] [padding_dim, 10]
         normalized_gt_bboxes = normalize_bbox(gt_bboxes, self.pc_range)
-
+        # bbox_pred: [900, 10] normalized_gt_bboxes[350, 10] -> cost: [900, 350]
+        # reg_cost: BBox3DL1Cost
         reg_cost = self.reg_cost(bbox_pred[:, :8], normalized_gt_bboxes[:, :8])
-
         # weighted sum of above two costs
         cost = cls_cost + reg_cost
 
         # 3. do Hungarian matching on CPU using linear_sum_assignment
-        if linear_sum_assignment is None:
-            raise ImportError('Please run "pip install scipy" '
-                              'to install scipy first.')
-        matched_row_inds, matched_col_inds = linear_sum_assignment(cost)
+        matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
+        # 4. Get matched bbox_targets and labels
 
-        # 4. assign backgrounds and foregrounds
-        # assign all indices to backgrounds first
-        assigned_gt_inds[:] = 0
-        # assign foregrounds based on matching results
-        assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
-        assigned_labels[matched_row_inds] = gt_labels[matched_col_inds]
-        return AssignResult(
-            num_gts, assigned_gt_inds, None, labels=assigned_labels)
+        # Note: matched_col_inds may contain -1
+        # we multiply it with gt_labels_mask to replace -1 with 0
+        assigned_labels = ops.gather(gt_labels, matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0).astype(ms.int32)
+        pos_gt_bboxes = ops.gather(gt_bboxes, matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        assigned_bbox_pred = ops.gather(bbox_pred, matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        assigned_cls_pred = ops.gather(cls_pred, matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        return assigned_cls_pred, assigned_bbox_pred, pos_gt_bboxes, assigned_labels

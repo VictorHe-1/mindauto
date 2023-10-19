@@ -2,6 +2,7 @@ from mindspore import nn, ops
 
 from mindauto.losses.utils import weight_reduce_loss
 
+
 class L1Loss(nn.Cell):
     """L1 loss.
 
@@ -19,11 +20,12 @@ class L1Loss(nn.Cell):
         self.loss_weight = loss_weight
 
     def construct(self,
-                pred,
-                target,
-                weight = None,
-                avg_factor = None,
-                reduction_override = None):
+                  pred,
+                  target,
+                  weight=None,
+                  avg_factor=None,
+                  reduction_override=None,
+                  label_mask=None):
         """Forward function.
 
         Args:
@@ -40,16 +42,13 @@ class L1Loss(nn.Cell):
         Returns:
             Tensor: Calculated loss
         """
-        if weight is not None and not ops.any(weight > 0):
-            if pred.ndim == weight.ndim + 1:
-                weight = weight.unsqueeze(1)
-            return (pred * weight).sum()
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
         loss_bbox = self.loss_weight * l1_loss(
             pred, target)
-        loss_bbox = weight_reduce_loss(loss_bbox, weight, reduction=reduction, avg_factor=avg_factor)
+        loss_bbox = loss_bbox * weight
+        loss_bbox = weight_reduce_loss(loss_bbox, label_mask, reduction=reduction, avg_factor=avg_factor)
         return loss_bbox
 
 
