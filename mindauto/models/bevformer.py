@@ -286,7 +286,7 @@ class BEVFormer(MVXTwoStageDetector):
         imgs_queue = imgs_queue.reshape(bs * len_queue, num_cams, C, H, W)
         img_feats_list = self.extract_feat(img=imgs_queue, len_queue=len_queue)
         ops.stop_gradient(img_feats_list[0])
-        for i in range(1):
+        for i in range(len_queue):
             img_metas = [each[i] for each in img_metas_list]
             # if not img_metas[0]['prev_bev_exists']:
             #     prev_bev = ops.zeros((1, 2500, 256), ms.float32)

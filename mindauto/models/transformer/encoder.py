@@ -29,7 +29,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         self.fp16_enabled = False
 
     @staticmethod
-    def get_reference_points(H, W, Z=8, num_points_in_pillar=4, dim='3d', bs=1, dtype=ms.float32):
+    def get_reference_points(H, W, bs=1, dtype=ms.float32):
         """Get the reference points used in SCA and TSA.
         Args:
             H, W: spatial shape of bev.
@@ -43,33 +43,21 @@ class BEVFormerEncoder(TransformerLayerSequence):
         """
 
         # reference points in 3D space, used in spatial cross-attention (SCA)
-        if dim == '3d':
-            zs = np.tile(np.linspace(0.5, Z - 0.5, num_points_in_pillar
-                                     ).reshape(-1, 1, 1), (1, H, W)) / Z
-            xs = np.tile(np.linspace(0.5, W - 0.5, W
-                                     ).reshape(1, 1, W), (num_points_in_pillar, H, 1)) / W
-            ys = np.tile(np.linspace(0.5, H - 0.5, H
-                                     ).reshape(1, H, 1), (num_points_in_pillar, 1, W)) / H
-            ref_3d = np.stack((xs, ys, zs), -1)
-            ref_3d = np.transpose(np.transpose(ref_3d, (0, 3, 1, 2)
-                                               ).reshape(ref_3d.shape[0], ref_3d.shape[3], -1), (0, 2, 1))
-            ref_3d = np.repeat(ref_3d[None], bs, axis=0)
-            return ms.Tensor(ref_3d, dtype=dtype)
-
         # reference points on 2D bev plane, used in temporal self-attention (TSA).
-        elif dim == '2d':
-            ref_y, ref_x = ops.meshgrid(
-                ops.linspace(
-                    0.5, H - 0.5, H),
-                ops.linspace(
-                    0.5, W - 0.5, W),
-                indexing='ij'
-            )
-            ref_y = ref_y.reshape(-1)[None] / H
-            ref_x = ref_x.reshape(-1)[None] / W
-            ref_2d = ops.stack((ref_x, ref_y), -1)
-            ref_2d = ref_2d.tile((bs, 1, 1)).unsqueeze(2)
-            return ref_2d
+        ref_y, ref_x = ops.meshgrid(
+            ops.linspace(
+                0.5, H - 0.5, H),
+            ops.linspace(
+                0.5, W - 0.5, W),
+            indexing='ij'
+        )
+        ref_y = ref_y.astype(dtype)
+        ref_x = ref_x.astype(dtype)
+        ref_y = ref_y.reshape(-1)[None] / H
+        ref_x = ref_x.reshape(-1)[None] / W
+        ref_2d = ops.stack((ref_x, ref_y), -1)
+        ref_2d = ref_2d.tile((bs, 1, 1)).unsqueeze(2)
+        return ref_2d
 
     # This function must use torch fp32!
     def point_sampling(self, reference_points, pc_range, img_metas):
@@ -151,6 +139,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
             valid_ratios (Tensor): The radios of valid
                 points on the feature map, has shape
                 (bs, num_levels, 2)
+            shift: [1, 2]
         Returns:
             Tensor: Results with shape [1, num_query, bs, embed_dims] when
                 return_intermediate is `False`, otherwise it has shape
@@ -162,27 +151,25 @@ class BEVFormerEncoder(TransformerLayerSequence):
         # ref_3d = self.get_reference_points(
         #     bev_h, bev_w, self.pc_range[5] - self.pc_range[2], self.num_points_in_pillar, dim='3d',
         #     bs=bev_query.shape[1], dtype=bev_query.dtype)
-        ref_2d = self.get_reference_points(
-            bev_h, bev_w, dim='2d', bs=bev_query.shape[1], dtype=bev_query.dtype)
+        ref_2d = self.get_reference_points(bev_h, bev_w, bev_query.shape[1], bev_query.dtype)
         # reference_points_cam, bev_mask = self.point_sampling(
         #     ref_3d, self.pc_range, img_metas)
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
         shift_ref_2d = ref_2d.copy()
         shift_ref_2d += shift[:, None, None, :]
-
         # (num_query, bs, embed_dims) -> (bs, num_query, embed_dims)
         bev_query = bev_query.permute(1, 0, 2)
         bev_pos = bev_pos.permute(1, 0, 2)
         bs, len_bev, num_bev_level, _ = ref_2d.shape
-        if prev_bev.sum() != 0:  # prev_bev is not None
-            prev_bev = prev_bev.permute(1, 0, 2).astype(ms.float32)
-            prev_bev = ops.stack([prev_bev, bev_query], 1).reshape(bs * 2, len_bev, -1)
-            hybird_ref_2d = ops.stack([shift_ref_2d, ref_2d], 1).reshape(
-                bs * 2, len_bev, num_bev_level, 2)
-        else:
-            hybird_ref_2d = ops.stack([ref_2d, ref_2d], 1).reshape(
-                bs * 2, len_bev, num_bev_level, 2)
+        prev_bev = prev_bev.permute(1, 0, 2).astype(ms.float32)
+
+        is_first_frame = ops.stop_gradient((prev_bev.sum() == 0).astype(ms.float32))
+        value_selected = is_first_frame * prev_bev + (1 - is_first_frame) * bev_query
+        ref_selected = is_first_frame * ref_2d + (1 - is_first_frame) * shift_ref_2d
+        prev_bev = ops.stack([prev_bev, value_selected], 1).reshape(bs * 2, len_bev, -1)
+        hybird_ref_2d = ops.stack([ref_selected, ref_2d], 1).reshape(
+            bs * 2, len_bev, num_bev_level, 2)
 
         for lid, layer in enumerate(self.layers):
             output = layer(
@@ -345,25 +332,25 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 query = self.norms[norm_index](query)
                 norm_index += 1
 
-            # elif layer == 'cross_attn':  # spatial_cross_attn
-            #     query = self.attentions[attn_index](
-            #         query,
-            #         key,
-            #         value,
-            #         identity if self.pre_norm else None,
-            #         query_pos,
-            #         key_padding_mask,
-            #         spatial_shapes,
-            #         reference_points_cam,
-            #         bev_mask,
-            #         level_start_index,
-            #         key_pos,
-            #         mask,
-            #         attn_masks[attn_index],
-            #         img_metas,
-            #         indexes)
-            #     attn_index += 1
-            #     identity = query
+            elif layer == 'cross_attn':  # spatial_cross_attn
+                query = self.attentions[attn_index](
+                    query,
+                    key,
+                    value,
+                    identity if self.pre_norm else None,
+                    query_pos,
+                    key_padding_mask,
+                    spatial_shapes,
+                    reference_points_cam,
+                    bev_mask,
+                    level_start_index,
+                    key_pos,
+                    mask,
+                    attn_masks[attn_index],
+                    img_metas,
+                    indexes)
+                attn_index += 1
+                identity = query
 
             elif layer == 'ffn':
                 query = self.ffns[ffn_index](

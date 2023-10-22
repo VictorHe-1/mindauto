@@ -220,12 +220,12 @@ class MSDeformableAttention3D(nn.Cell):
         #  sampling_locations.shape: bs, num_query, num_heads, num_levels, num_all_points, 2
         #  attention_weights.shape: bs, num_query, num_heads, num_levels, num_all_points
         #
-        # output = multi_scale_deformable_attn_pytorch(
-        #     value, [[15, 25]], sampling_locations, attention_weights)
-        # if not self.batch_first:
-        #     output = output.permute(1, 0, 2)
+        output = multi_scale_deformable_attn_pytorch(
+            value, spatial_shapes, sampling_locations, attention_weights)
+        if not self.batch_first:
+            output = output.permute(1, 0, 2)
 
-        return value
+        return output
 
 
 class SpatialCrossAttention(nn.Cell):
