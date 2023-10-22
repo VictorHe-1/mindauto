@@ -72,33 +72,49 @@ class BEVFormerHead(DETRHead):
 
     def _init_layers(self):
         """Initialize classification branch and regression branch of head."""
-        cls_branch = []
-        for _ in range(self.num_reg_fcs):
-            cls_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
-            cls_branch.append(nn.LayerNorm(normalized_shape=(self.embed_dims,), epsilon=1e-05))
-            cls_branch.append(nn.ReLU())
-        cls_branch.append(nn.Dense(self.embed_dims, self.cls_out_channels))
-        fc_cls = nn.SequentialCell(*cls_branch)
-
-        reg_branch = []
-        for _ in range(self.num_reg_fcs):
-            reg_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
-            reg_branch.append(nn.ReLU())
-        reg_branch.append(nn.Dense(self.embed_dims, self.code_size))
-        reg_branch = nn.SequentialCell(*reg_branch)
-
-        def _get_clones(module, N):
-            return nn.CellList([copy.deepcopy(module) for i in range(N)])
-
         # last reg_branch is used to generate proposal from
         # encode feature map when as_two_stage is True.
         num_pred = (self.transformer.decoder.num_layers + 1) if \
             self.as_two_stage else self.transformer.decoder.num_layers
 
         if self.with_box_refine:
-            self.cls_branches = _get_clones(fc_cls, num_pred)
-            self.reg_branches = _get_clones(reg_branch, num_pred)
+            cls_branches_list = []
+            for i in range(num_pred):
+                cls_branch = []
+                for _ in range(self.num_reg_fcs):
+                    cls_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
+                    cls_branch.append(nn.LayerNorm(normalized_shape=(self.embed_dims,), epsilon=1e-05))
+                    cls_branch.append(nn.ReLU())
+                cls_branch.append(nn.Dense(self.embed_dims, self.cls_out_channels))
+                fc_cls = nn.SequentialCell(*cls_branch)
+                cls_branches_list.append(fc_cls)
+
+            reg_branches_list = []
+            for i in range(num_pred):
+                reg_branch = []
+                for _ in range(self.num_reg_fcs):
+                    reg_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
+                    reg_branch.append(nn.ReLU())
+                reg_branch.append(nn.Dense(self.embed_dims, self.code_size))
+                reg_branch = nn.SequentialCell(*reg_branch)
+                reg_branches_list.append(reg_branch)
+            self.cls_branches = nn.CellList(cls_branches_list)
+            self.reg_branches = nn.CellList(reg_branches_list)
         else:
+            cls_branch = []
+            for _ in range(self.num_reg_fcs):
+                cls_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
+                cls_branch.append(nn.LayerNorm(normalized_shape=(self.embed_dims,), epsilon=1e-05))
+                cls_branch.append(nn.ReLU())
+            cls_branch.append(nn.Dense(self.embed_dims, self.cls_out_channels))
+            fc_cls = nn.SequentialCell(*cls_branch)
+
+            reg_branch = []
+            for _ in range(self.num_reg_fcs):
+                reg_branch.append(nn.Dense(self.embed_dims, self.embed_dims))
+                reg_branch.append(nn.ReLU())
+            reg_branch.append(nn.Dense(self.embed_dims, self.code_size))
+            reg_branch = nn.SequentialCell(*reg_branch)
             self.cls_branches = nn.CellList(
                 [fc_cls for _ in range(num_pred)])
             self.reg_branches = nn.CellList(

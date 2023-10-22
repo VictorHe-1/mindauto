@@ -141,7 +141,7 @@ def build_dataset(
             combined_columns = 'img_metas/'+ sub_key
             dataset_config['output_columns'].append(combined_columns)
 
-    dataset_config['output_columns'].append('ordered_key')
+    # dataset_config['output_columns'].append('ordered_key')
     dataset_config['test_mode'] = not is_train
     dataset = dataset_class(**dataset_config)
 

@@ -323,7 +323,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                                                      f'operation_order {self.num_attn}'
 
         for layer in self.operation_order:
-            # temporal self attention
             if layer == 'self_attn':  # temporal_self_attention
                 query = self.attentions[attn_index](
                     query,
@@ -346,26 +345,25 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 query = self.norms[norm_index](query)
                 norm_index += 1
 
-            # spaital cross attention
-            elif layer == 'cross_attn':  # spatial_cross_attn
-                query = self.attentions[attn_index](
-                    query,
-                    key,
-                    value,
-                    identity if self.pre_norm else None,
-                    query_pos,
-                    key_padding_mask,
-                    spatial_shapes,
-                    reference_points_cam,
-                    bev_mask,
-                    level_start_index,
-                    key_pos,
-                    mask,
-                    attn_masks[attn_index],
-                    img_metas,
-                    indexes)
-                attn_index += 1
-                identity = query
+            # elif layer == 'cross_attn':  # spatial_cross_attn
+            #     query = self.attentions[attn_index](
+            #         query,
+            #         key,
+            #         value,
+            #         identity if self.pre_norm else None,
+            #         query_pos,
+            #         key_padding_mask,
+            #         spatial_shapes,
+            #         reference_points_cam,
+            #         bev_mask,
+            #         level_start_index,
+            #         key_pos,
+            #         mask,
+            #         attn_masks[attn_index],
+            #         img_metas,
+            #         indexes)
+            #     attn_index += 1
+            #     identity = query
 
             elif layer == 'ffn':
                 query = self.ffns[ffn_index](

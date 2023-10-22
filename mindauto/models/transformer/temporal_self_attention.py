@@ -204,6 +204,7 @@ class TemporalSelfAttention(nn.Cell):
         if reference_points.shape[-1] == 2:
             offset_normalizer = ops.stack(
                 [spatial_shapes_tensor[..., 1], spatial_shapes_tensor[..., 0]], axis=-1).astype(ms.float32)
+            # offset_normalizer = spatial_shapes_tensor.copy()
             new_reference_points = ops.expand_dims(reference_points, 3)
             new_reference_points = ops.expand_dims(new_reference_points, 2)
 
@@ -212,7 +213,8 @@ class TemporalSelfAttention(nn.Cell):
             offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
             offset_normalizer = ops.expand_dims(offset_normalizer, axis=0)
 
-            sampling_locations = new_reference_points + sampling_offsets / offset_normalizer
+            # sampling_locations = new_reference_points + sampling_offsets / offset_normalizer
+            sampling_locations = new_reference_points + sampling_offsets
         elif reference_points.shape[-1] == 4:
             sampling_locations = reference_points[:, :, None, :, None, :2] \
                                  + sampling_offsets / self.num_points \
@@ -222,9 +224,9 @@ class TemporalSelfAttention(nn.Cell):
             raise ValueError(
                 f'Last dim of reference_points must be'
                 f' 2 or 4, but get {reference_points.shape[-1]} instead.')
-
         output = multi_scale_deformable_attn_pytorch(
-            value, spatial_shapes, sampling_locations, attention_weights)
+            value, [[50, 50]], sampling_locations, attention_weights)
+
         # output shape (bs*num_bev_queue, num_query, embed_dims)
         # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
         output = output.permute(1, 2, 0)
@@ -241,5 +243,4 @@ class TemporalSelfAttention(nn.Cell):
 
         if not self.batch_first:
             output = output.permute(1, 0, 2)
-
         return self.dropout(output) + identity

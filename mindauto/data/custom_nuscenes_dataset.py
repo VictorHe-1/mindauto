@@ -441,7 +441,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         return input_dict
 
     # ms.GeneratorDataset must have (numpy.ndarray, ...)
-    def convert_data_to_numpy(self, data):
+    def convert_data_to_numpy(self, data, training=True):  # add flag: training
         # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
         ordered_key = ['gt_labels_3d', 'img', 'gt_labels_mask', 'grid_mask_img', 'max_len',
                        'indexes', 'reference_points_cam', 'bev_mask', 'shift']
@@ -458,9 +458,15 @@ class CustomNuScenesDataset(NuScenesDataset):
                 new_key_list = ['img_metas', str(key), sub_key]
                 new_key = "/".join(new_key_list)
                 if sub_key == 'box_type_3d':
-                    data[new_key] = np.array(str(value[sub_key]))  # MS limit: convert object to str
+                    if training:
+                        data[new_key] = np.array([1])
+                    else:
+                        data[new_key] = np.array(str(value[sub_key]))  # MS limit: convert object to str
                 else:
-                    data[new_key] = np.array(value[sub_key])
+                    if training and sub_key == 'scene_token':  # for training: Tensor must not be Tensor[String]
+                        data[new_key] = np.array([0])
+                    else:
+                        data[new_key] = np.array(value[sub_key])
 
                 ordered_key_list = ['img_metas', str(queue_length), sub_key]
                 ordered_key.append("/".join(ordered_key_list))
@@ -474,7 +480,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             if data[key].dtype == np.int64:
                 data[key] = data[key].astype(np.int32)
             numpy_data.append(data[key])
-        numpy_data.append(np.array(ordered_key))
+        # numpy_data.append(np.array(ordered_key))
         return tuple(numpy_data)
 
     def convert_data_to_numpy_test(self, data):
