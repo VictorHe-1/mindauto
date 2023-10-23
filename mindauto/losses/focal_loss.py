@@ -39,9 +39,6 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
                               pred,
                               target,
                               weight=None,
-                              gamma=2.0,
-                              alpha=0.25,
-                              reduction='mean',
                               avg_factor=None,
                               label_mask=None
                               ):
@@ -64,8 +61,8 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
         pred_sigmoid = ops.sigmoid(pred)
         target = target.astype(pred.dtype)
         pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
-        focal_weight = (alpha * target + (1 - alpha) *
-                        (1 - target)) * pt.pow(gamma)
+        focal_weight = (self.alpha * target + (1 - self.alpha) *
+                        (1 - target)) * pt.pow(self.gamma)
         weight = ops.ones_like(pred)
         pos_weight = ops.ones_like(pred)
         loss = ops.binary_cross_entropy_with_logits(
@@ -84,16 +81,15 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
                     assert weight.numel() == loss.numel()
                     weight = weight.view(loss.shape[0], -1)
             assert weight.ndim == loss.ndim
-        loss = weight_reduce_loss(loss, label_mask, reduction, avg_factor)
+        loss = weight_reduce_loss(loss, label_mask, self.reduction, avg_factor)
         return loss
 
     def construct(self,
-                pred,
-                target,
-                weight=None,
-                avg_factor=None,
-                reduction_override=None,
-                label_mask=None):
+                  pred,
+                  target,
+                  weight=None,
+                  avg_factor=None,
+                  label_mask=None):
         """Forward function.
 
         Args:
@@ -110,20 +106,13 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
         Returns:
             ms.Tensor: The calculated loss
         """
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (
-            reduction_override if reduction_override else self.reduction)
         if self.use_sigmoid:
             num_classes = pred.shape[1]
             target = ops.one_hot(target, num_classes, 1, 0)
-
             loss_cls = self.loss_weight * self.py_sigmoid_focal_loss(
                 pred,
                 target,
                 weight,
-                gamma=self.gamma,  # 2.0
-                alpha=self.alpha,  # 0.25
-                reduction=reduction,  # 'mean'
                 avg_factor=avg_factor,
                 label_mask=label_mask)
         else:

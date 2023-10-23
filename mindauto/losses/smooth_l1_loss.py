@@ -24,7 +24,6 @@ class L1Loss(nn.Cell):
                   target,
                   weight=None,
                   avg_factor=None,
-                  reduction_override=None,
                   label_mask=None):
         """Forward function.
 
@@ -42,13 +41,10 @@ class L1Loss(nn.Cell):
         Returns:
             Tensor: Calculated loss
         """
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (
-            reduction_override if reduction_override else self.reduction)
         loss_bbox = self.loss_weight * l1_loss(
             pred, target)
         loss_bbox = loss_bbox * weight
-        loss_bbox = weight_reduce_loss(loss_bbox, label_mask, reduction=reduction, avg_factor=avg_factor)
+        loss_bbox = weight_reduce_loss(loss_bbox, label_mask, reduction=self.reduction, avg_factor=avg_factor)
         return loss_bbox
 
 

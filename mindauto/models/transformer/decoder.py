@@ -23,14 +23,16 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
         self.return_intermediate = return_intermediate
         self.fp16_enabled = False
 
+    def init_reg_cls(self, reg_branches, cls_branches):
+        self.reg_branches = reg_branches
+        self.cls_branches = cls_branches
+
     def construct(self,
                   query,
                   key,
                   value,
                   query_pos,
                   reference_points=None,
-                  reg_branches=None,
-                  cls_branches=None,
                   spatial_shapes=None,
                   level_start_index=None,
                   img_metas=None,
@@ -64,15 +66,14 @@ class DetectionTransformerDecoder(TransformerLayerSequence):
                 value=value,
                 query_pos=query_pos,
                 reference_points=reference_points_input,
-                cls_branches=cls_branches,
                 spatial_shapes=spatial_shapes,
                 level_start_index=level_start_index,
                 img_metas=img_metas,
                 key_padding_mask=key_padding_mask,
                 )
             output = output.permute(1, 0, 2)
-            if reg_branches is not None:
-                tmp = reg_branches[lid](output)
+            if self.reg_branches is not None:
+                tmp = self.reg_branches[lid](output)
 
                 assert reference_points.shape[-1] == 3
 

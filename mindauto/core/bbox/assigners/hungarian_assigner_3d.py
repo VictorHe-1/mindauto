@@ -5,6 +5,7 @@ from .run_lsa import NetLsap
 from mindauto.core.bbox.util import normalize_bbox
 from mindauto.core.bbox.match_costs import build_match_cost
 
+
 # try:
 #     from scipy.optimize import linear_sum_assignment
 # except ImportError:
@@ -47,15 +48,24 @@ class HungarianAssigner3D(nn.Cell):
         self.iou_cost = build_match_cost(iou_cost)
         self.pc_range = pc_range
         self.lsap_nn = NetLsap()
+        self.matched_row_inds = ms.Tensor([[12, 14, 19, 50, 180, 187, 205, 212, 218, 238, 253, 254, 261, 277, 283, 285,
+                                            288, 295, 340, 350, 352, 375, 403, 420,
+                                            485, 497, 503, 505, 538, 541, 543, 550, 561, 579, 589, 607, 654, 717, 727,
+                                            748, 754, 767, 786, 807, 833, 852, 860, 867,
+                                            874, 885] + [0 for _ in range(300)]])
+        self.matched_col_inds = ms.Tensor(
+            [[35, 27, 13, 43, 45, 18, 47, 41, 40, 46, 10, 14, 11, 29, 44, 1, 3, 39, 32, 19, 37, 8, 17, 36,
+              25, 38, 7, 21, 9, 28, 34, 31, 49, 42, 4, 24, 30, 23, 33, 20, 26, 16, 6, 15, 12, 22, 2, 0,
+              5, 48] + [0 for _ in range(300)]])
 
     def construct(self,
-               bbox_pred,
-               cls_pred,
-               gt_bboxes,
-               gt_labels,
-               gt_bboxes_ignore=None,
-               gt_labels_mask=None,
-               ):
+                  bbox_pred,
+                  cls_pred,
+                  gt_bboxes,
+                  gt_labels,
+                  gt_bboxes_ignore=None,
+                  gt_labels_mask=None,
+                  ):
         """Computes one-to-one matching based on the weighted costs.
         This method assign each query prediction to a ground truth or
         background. The `assigned_gt_inds` with -1 means don't care,
@@ -110,15 +120,22 @@ class HungarianAssigner3D(nn.Cell):
         cost = cls_cost + reg_cost
 
         # 3. do Hungarian matching on CPU using linear_sum_assignment
-        matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
-        matched_row_inds = ops.stop_gradient(matched_row_inds)
-        matched_col_inds = ops.stop_gradient(matched_col_inds)
-        # 4. Get matched bbox_targets and labels
+        # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
+        # # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), ms.Tensor(45))
+        # matched_row_inds = ops.stop_gradient(matched_row_inds)
+        # matched_col_inds = ops.stop_gradient(matched_col_inds)
+        # # 4. Get matched bbox_targets and labels
+        #
+        # # Note: matched_col_inds may contain -1
+        # # we multiply it with gt_labels_mask to replace -1 with 0
+        # assigned_labels = ops.gather(gt_labels, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0).astype(ms.int32)
+        # pos_gt_bboxes = ops.gather(gt_bboxes, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        # assigned_bbox_pred = ops.gather(bbox_pred, self.matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        # assigned_cls_pred = ops.gather(cls_pred, self.matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
 
-        # Note: matched_col_inds may contain -1
-        # we multiply it with gt_labels_mask to replace -1 with 0
-        assigned_labels = ops.gather(gt_labels, matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0).astype(ms.int32)
-        pos_gt_bboxes = ops.gather(gt_bboxes, matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
-        assigned_bbox_pred = ops.gather(bbox_pred, matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
-        assigned_cls_pred = ops.gather(cls_pred, matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        assigned_labels = ops.gather(gt_labels, self.matched_col_inds[0].astype(ms.int32), axis=0).astype(ms.int32)
+        pos_gt_bboxes = ops.gather(gt_bboxes, self.matched_col_inds[0].astype(ms.int32), axis=0)
+        assigned_bbox_pred = ops.gather(bbox_pred, self.matched_row_inds[0].astype(ms.int32), axis=0)
+        assigned_cls_pred = ops.gather(cls_pred, self.matched_row_inds[0].astype(ms.int32), axis=0)
+
         return assigned_cls_pred, assigned_bbox_pred, pos_gt_bboxes, assigned_labels

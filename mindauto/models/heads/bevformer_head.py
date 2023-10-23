@@ -1,5 +1,3 @@
-import copy
-
 import numpy as np
 import mindspore as ms
 from mindspore import nn, ops
@@ -67,6 +65,9 @@ class BEVFormerHead(DETRHead):
         self.num_cls_fcs = num_cls_fcs - 1
         super(BEVFormerHead, self).__init__(
             *args, transformer=transformer, **kwargs)
+        reg_branches = self.reg_branches if self.with_box_refine else None
+        cls_branches = self.cls_branches if self.as_two_stage else None
+        self.transformer.init_reg_cls(reg_branches, cls_branches)
         self.code_weights = ms.Parameter(
             code_weights, requires_grad=False, name='code_weights')
 
@@ -191,8 +192,6 @@ class BEVFormerHead(DETRHead):
                 grid_length=(self.real_h / self.bev_h,
                              self.real_w / self.bev_w),
                 bev_pos=bev_pos,
-                reg_branches=self.reg_branches if self.with_box_refine else None,  # noqa:E501
-                cls_branches=self.cls_branches if self.as_two_stage else None,
                 prev_bev=prev_bev,
                 img_metas=img_metas,
                 indexes=indexes,
@@ -339,7 +338,6 @@ class BEVFormerHead(DETRHead):
         gt_bboxes_ignore_list = [
             gt_bboxes_ignore_list for _ in range(num_imgs)
         ]
-
         labels_list = []
         label_weights_list = []
         bbox_targets_list = []
@@ -423,7 +421,6 @@ class BEVFormerHead(DETRHead):
         # isnotnan = ops.isfinite(normalized_bbox_targets).all(axis=-1)
         num_bbox = bbox_weights.shape[0]
         bbox_weights = bbox_weights * ops.tile(self.code_weights, (num_bbox, 1))
-
         loss_bbox = self.loss_bbox(
             assigned_bbox_preds[..., :10],
             normalized_bbox_targets[..., :10],
@@ -438,9 +435,9 @@ class BEVFormerHead(DETRHead):
              gt_bboxes_list,
              gt_labels_list,
              preds_dicts,
-             gt_bboxes_ignore=None,
              img_metas=None,
-             gt_labels_mask=None):
+             gt_labels_mask=None,
+             gt_bboxes_ignore=None):
         """"Loss function.
         Args:
 
@@ -500,32 +497,7 @@ class BEVFormerHead(DETRHead):
                                                    all_gt_masks_list[i])
             losses_cls.append(loss_cls)
             losses_bbox.append(loss_bbox)
-
-        loss_dict = dict()
-        # loss of proposal generated from encode feature map.
-        if enc_cls_scores is not None:
-            binary_labels_list = [
-                ops.zeros_like(ms.Tensor(gt_labels_list[i]))
-                for i in range(len(all_gt_labels_list))
-            ]
-            enc_loss_cls, enc_losses_bbox = \
-                self.loss_single(enc_cls_scores, enc_bbox_preds,
-                                 gt_bboxes_list, binary_labels_list, gt_bboxes_ignore, gt_labels_mask)
-            loss_dict['enc_loss_cls'] = enc_loss_cls
-            loss_dict['enc_loss_bbox'] = enc_losses_bbox
-
-        # loss from the last decoder layer
-        loss_dict['loss_cls'] = losses_cls[-1]
-        loss_dict['loss_bbox'] = losses_bbox[-1]
-
-        # loss from other decoder layers
-        num_dec_layer = 0
-        for loss_cls_i, loss_bbox_i in zip(losses_cls[:-1],
-                                           losses_bbox[:-1]):
-            loss_dict[f'd{num_dec_layer}.loss_cls'] = loss_cls_i
-            loss_dict[f'd{num_dec_layer}.loss_bbox'] = loss_bbox_i
-            num_dec_layer += 1
-        return loss_dict
+        return sum(losses_cls) + sum(losses_bbox)
 
     def get_bboxes(self, preds_dicts, img_metas, rescale=False):
         """Generate bboxes from bbox head predictions.

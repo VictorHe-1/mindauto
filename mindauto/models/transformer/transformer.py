@@ -228,7 +228,6 @@ class MultiheadAttention(nn.Cell):
                   attn_mask=None,
                   key_padding_mask=None,
                   reference_points=None,
-                  cls_branches=None,
                   spatial_shapes=None,
                   level_start_index=None,
                   img_metas=None
@@ -358,6 +357,11 @@ class PerceptionTransformer(nn.Cell):
         self.two_stage_num_proposals = two_stage_num_proposals
         self.init_layers()
         self.rotate_center = rotate_center
+
+    def init_reg_cls(self, reg_branches, cls_branches):
+        self.reg_branches = reg_branches
+        self.cls_branches = cls_branches
+        self.decoder.init_reg_cls(reg_branches, cls_branches)
 
     def init_layers(self):
         """Initialize layers of the Detr3DTransformer."""
@@ -498,8 +502,6 @@ class PerceptionTransformer(nn.Cell):
                   bev_w,
                   grid_length=[0.512, 0.512],  # No diff
                   bev_pos=None,  # No Diff
-                  reg_branches=None,
-                  cls_branches=None,
                   prev_bev=None,
                   img_metas=None,
                   indexes=None,
@@ -575,8 +577,6 @@ class PerceptionTransformer(nn.Cell):
             value=bev_embed,
             query_pos=query_pos,
             reference_points=reference_points,
-            reg_branches=reg_branches,
-            cls_branches=cls_branches,
             spatial_shapes=[[bev_h, bev_w]],
             level_start_index=ms.Tensor([0], dtype=ms.float32),
             img_metas=img_metas)
