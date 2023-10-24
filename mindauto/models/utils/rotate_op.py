@@ -10,10 +10,13 @@ def get_rotate_matrix(center_f, angle, dtype=ms.float32):
     get rotation matrix according to rotation center and angle
     res = R(img - c) + c
     """
-    angle_r = math.radians(angle)
-    rotation = ms.Tensor([[math.cos(angle_r), -math.sin(angle_r)],
-                          [math.sin(angle_r), math.cos(angle_r)]],
-                         dtype=dtype)
+    if not ops.is_tensor(angle):
+        angle = ms.Tensor(angle, dtype=dtype)
+    angle_r = ms.numpy.radians(angle)
+    rotation = ops.stack(
+        [ops.stack([angle_r.cos(), -angle_r.sin()]),
+         ops.stack([angle_r.sin(), angle_r.cos()])]
+    )
     translation = (- rotation + ops.eye(2, 2, dtype)).matmul(ms.Tensor(center_f, dtype))
     matrix = ops.concat([rotation, translation.reshape(2, 1)], axis=1) # (2, 3)
     return matrix

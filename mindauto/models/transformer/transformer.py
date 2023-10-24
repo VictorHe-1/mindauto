@@ -6,7 +6,6 @@ import numpy as np
 from mindspore import nn, ops
 import mindspore as ms
 import mindspore.common.initializer as init
-from mindspore.dataset.vision import Rotate
 from mindspore.ops.function.nn_func import multi_head_attention_forward
 
 from .temporal_self_attention import TemporalSelfAttention
@@ -17,6 +16,9 @@ from common import build_activation_layer, build_dropout
 
 # import torch.nn as nn
 # nn.MultiheadAttention
+from ..utils import rotate
+
+
 class _Linear(nn.Dense):
     def __init__(self, in_channels, out_channels, has_bias=True):
         fan_in, _ = init._calculate_fan_in_and_fan_out((out_channels, in_channels))
@@ -434,22 +436,27 @@ class PerceptionTransformer(nn.Cell):
         # obtain rotation angle and shift with ego motion
         prev_bev = prev_bev.permute(1, 0, 2)
         # graph mode doesn't support the following codes:
-        # if prev_bev is not None:
-        #     if prev_bev.shape[1] == bev_h * bev_w:  # this op cause dynamic shape in graph mode
-        #         prev_bev = prev_bev.permute(1, 0, 2)
-        #     if self.rotate_prev_bev:
-        #         concat = ops.Concat(axis=1)
-        #         for i in range(bs):
-        #             # num_prev_bev = prev_bev.size(1)
-        #             rotation_angle = img_metas[i]['can_bus'][-1]
-        #             tmp_prev_bev = prev_bev[:, i].reshape(
-        #                 bev_h, bev_w, -1).permute(2, 0, 1)
-        #             # Warning: this rotation replace the original torchvision.transforms.functional.rotate
-        #             rotate = Rotate(degrees=float(rotation_angle), center=tuple(self.rotate_center))
-        #             tmp_prev_bev = ms.Tensor(rotate(tmp_prev_bev.asnumpy()), dtype=ms.float32)
-        #             tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
-        #                 bev_h * bev_w, 1, -1)
-        #             prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))  # prev_bev[:, i] = tmp_prev_bev[:, 0]
+        if self.rotate_prev_bev:
+            concat = ops.Concat(axis=1)
+            for i in range(bs):
+                # num_prev_bev = prev_bev.size(1)
+                rotation_angle = img_metas[i]['can_bus'][-1]
+                tmp_prev_bev = prev_bev[:, i].reshape(
+                    bev_h, bev_w, -1).permute(2, 0, 1)
+
+                # assert not ops.is_tensor(rotation_angle), f'rotation angle type {type(rotation_angle)}'
+                # assert not ops.is_tensor(self.rotate_center), f'rotation center type {type(self.rotate_center)}'
+                # Warning: this rotation replace the original torchvision.transforms.functional.rotate
+                # tmp_prev_bev = self.rotate_op(tmp_prev_bev, float(rotation_angle),
+                #                       center=self.rotate_center).astype(ms.float32)
+
+                # tmp_prev_bev = self.rotate_op(tmp_prev_bev, 80, (0, 0))
+
+                tmp_prev_bev = rotate(tmp_prev_bev, rotation_angle, self.rotate_center)
+                # tmp_prev_bev = rotate(tmp_prev_bev, 80, (10, 14)).astype(ms.float32)
+                tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
+                    bev_h * bev_w, 1, -1)
+                prev_bev = concat((prev_bev[:, :i], tmp_prev_bev[:, 0:1], prev_bev[:, i + 1:]))  # prev_bev[:, i] = tmp_prev_bev[:, 0]
 
         # add can bus signals
         can_bus = ops.stack([each['can_bus'] for each in img_metas], 0)
