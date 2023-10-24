@@ -367,44 +367,19 @@ class BEVFormer(MVXTwoStageDetector):
             img_feats = self.extract_feat(img=grid_img, img_metas=img_metas)
         else:
             img_feats = self.extract_feat(img=img, img_metas=img_metas)
-        # losses = dict()
+        prev_bev_exists = img_metas[0]['prev_bev_exists'].astype(ms.int32)
+        true_prev_bev = prev_bev_exists * prev_bev + (1 - prev_bev_exists) * ops.zeros((1, 2500, 256), ms.float32)
         losses_pts = self.forward_pts_train(img_feats,
                                             gt_bboxes_3d,
                                             gt_labels_3d,
                                             img_metas,
                                             gt_bboxes_ignore,
-                                            prev_bev,
+                                            true_prev_bev,
                                             indexes[-1],
                                             reference_points_cam[-1],
                                             bev_mask[-1],
                                             shift[-1],
                                             gt_labels_mask[-1])
-        # if not img_metas[0]['prev_bev_exists']:
-        #     losses_pts = self.forward_pts_train(img_feats,
-        #                                         gt_bboxes_3d,
-        #                                         gt_labels_3d,
-        #                                         img_metas,
-        #                                         gt_bboxes_ignore,
-        #                                         ops.zeros((1, 2500, 256), ms.float32),
-        #                                         indexes[-1],
-        #                                         reference_points_cam[-1],
-        #                                         bev_mask[-1],
-        #                                         shift[-1],
-        #                                         gt_labels_mask[-1])
-        # else:
-        #     losses_pts = self.forward_pts_train(img_feats,
-        #                                         gt_bboxes_3d,
-        #                                         gt_labels_3d,
-        #                                         img_metas,
-        #                                         gt_bboxes_ignore,
-        #                                         prev_bev,
-        #                                         indexes[-1],
-        #                                         reference_points_cam[-1],
-        #                                         bev_mask[-1],
-        #                                         shift[-1],
-        #                                         gt_labels_mask[-1])
-        # losses.update(losses_pts)
-        # return sum(losses.values())
         return losses_pts
 
     def forward_test(self, img_metas, img=None, **kwargs):
