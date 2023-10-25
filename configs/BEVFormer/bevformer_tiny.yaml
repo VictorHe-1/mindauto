@@ -5,7 +5,7 @@ system:
   seed: 0 # BEVFormer seed is 0
   val_while_train: False
   drop_overflow_update: False
-  device_id: 1
+  device_id: 2
   log_interval: 1
 
 dim: &dim 256
@@ -230,7 +230,7 @@ train: #  ema: True
 
   loader:
     shuffle: False
-    batch_size: 1
+    batch_size: 1 # only support batch_size = 1
     drop_remainder: True
     num_workers: 1
 
@@ -261,8 +261,6 @@ eval:
                 keys: [ 'img' ]
     #  the order of the dataloader list, matching the network input and the labels for evaluation
     output_columns: [ 'img_metas', 'img' ]
-    #    net_input_column_index: [ 0 ]
-    #    label_column_index: [ 1, 2]  # input indices marked as label
     bev_size: *bev_size
     classes: *class_names
     modality: *input_modality
