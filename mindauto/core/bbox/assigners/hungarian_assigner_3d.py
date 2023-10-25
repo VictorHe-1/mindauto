@@ -121,21 +121,16 @@ class HungarianAssigner3D(nn.Cell):
 
         # 3. do Hungarian matching on CPU using linear_sum_assignment
         # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
-        # # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), ms.Tensor(45))
+        # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), ms.Tensor(45))
         # matched_row_inds = ops.stop_gradient(matched_row_inds)
         # matched_col_inds = ops.stop_gradient(matched_col_inds)
         # # 4. Get matched bbox_targets and labels
         #
         # # Note: matched_col_inds may contain -1
         # # we multiply it with gt_labels_mask to replace -1 with 0
-        assigned_labels = ops.gather(gt_labels, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        assigned_labels = ops.gather(gt_labels, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0).astype(ms.int32)
         pos_gt_bboxes = ops.gather(gt_bboxes, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
         assigned_bbox_pred = ops.gather(bbox_pred, self.matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
         assigned_cls_pred = ops.gather(cls_pred, self.matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
-
-        # assigned_labels = ops.gather(gt_labels, self.matched_col_inds[0].astype(ms.int32), axis=0).astype(ms.int32)
-        # pos_gt_bboxes = ops.gather(gt_bboxes, self.matched_col_inds[0].astype(ms.int32), axis=0)
-        # assigned_bbox_pred = ops.gather(bbox_pred, self.matched_row_inds[0].astype(ms.int32), axis=0)
-        # assigned_cls_pred = ops.gather(cls_pred, self.matched_row_inds[0].astype(ms.int32), axis=0)
 
         return assigned_cls_pred, assigned_bbox_pred, pos_gt_bboxes, assigned_labels

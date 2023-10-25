@@ -31,15 +31,12 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, num_heads, num_levels, num_points, _ = \
         sampling_locations.shape
+    # since value_spatial_shapes only has 1 level we don't need to split
     # value_list = value.split([H_ * W_ for H_, W_ in value_spatial_shapes],
     #                          axis=1)  # value_spatial_shapes dynamic
     sampling_grids = 2 * sampling_locations - 1
     sampling_value_list = []
-    # for level, (H_, W_) in enumerate(value_spatial_shapes):
-        # bs, H_*W_, num_heads, embed_dims ->
-        # bs, H_*W_, num_heads*embed_dims ->
-        # bs, num_heads*embed_dims, H_*W_ ->
-        # bs*num_heads, embed_dims, H_, W_
+
     value_l_ = ops.swapaxes(ops.flatten(value, start_dim=2), 1, 2).reshape(
         bs * num_heads, embed_dims, value_spatial_shapes[0][0], value_spatial_shapes[0][1])
     # bs, num_queries, num_heads, num_points, 2 ->
@@ -55,15 +52,13 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
         padding_mode='zeros',
         align_corners=False)
     sampling_value_list.append(sampling_value_l_)
-    # # (bs, num_queries, num_heads, num_levels, num_points) ->
-    # # (bs, num_heads, num_queries, num_levels, num_points) ->
-    # # (bs, num_heads, 1, num_queries, num_levels*num_points)
+    # (bs, num_queries, num_heads, num_levels, num_points) ->
+    # (bs, num_heads, num_queries, num_levels, num_points) ->
+    # (bs, num_heads, 1, num_queries, num_levels*num_points)
     attention_weights = ops.swapaxes(attention_weights, 1, 2).reshape(
         bs * num_heads, 1, num_queries, num_levels * num_points)
-    #
+
     output = ops.sum(ops.flatten(ops.stack(sampling_value_list, axis=-2), start_dim=-2) *
                      attention_weights, -1).view(bs, num_heads * embed_dims,
                                                  num_queries)
     return ops.swapaxes(output, 1, 2)
-    # return value.reshape(bs, num_heads, -1) + sampling_grid_l_.sum()
-    # return value.reshape(bs, num_heads, -1) + sampling_grid_l_.sum()

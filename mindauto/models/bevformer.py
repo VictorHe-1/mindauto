@@ -229,22 +229,25 @@ class BEVFormer(MVXTwoStageDetector):
         list[list[dict]]), with the outer list indicating test time
         augmentations.
         """
-        new_args = {}
         if self.training:
             img_meta_dict = restore_img_metas(args)
             lidar_inst = restore_3d_bbox(args)
-            new_args['img'] = args[1]
-            new_args['gt_labels_mask'] = args[2][0]
-            new_args['grid_mask_img'] = args[3]
-            new_args['img_metas'] = [img_meta_dict]
-            new_args['gt_labels_3d'] = [args[0].squeeze(0)]
-            new_args['gt_bboxes_3d'] = [lidar_inst]
-            new_args['indexes'] = args[5][0]
-            new_args['reference_points_cam'] = args[6][0]
-            new_args['bev_mask'] = args[7][0]
-            new_args['shift'] = args[8][0]
-            return self.forward_train(**new_args)
+            return self.forward_train(img_metas=[img_meta_dict],
+                                      gt_bboxes_3d=[lidar_inst],
+                                      gt_labels_3d=[args[0].squeeze(0)],
+                                      img=args[1],
+                                      gt_labels_mask=args[2][0],
+                                      grid_mask_img=args[3],
+                                      proposals=None,
+                                      gt_bboxes_ignore=None,
+                                      img_depth=None,
+                                      img_mask=None,
+                                      indexes=args[5][0],
+                                      reference_points_cam=args[6][0],
+                                      bev_mask=args[7][0],
+                                      shift=args[8][0])
         else:
+            new_args = {}
             new_args['rescale'] = True
             restore_img_metas_for_test(args, new_args)
             return self.forward_test(**new_args)
@@ -292,21 +295,16 @@ class BEVFormer(MVXTwoStageDetector):
         ops.stop_gradient(img_feats_list[0])
         for i in range(len_queue):
             img_metas = [each[i] for each in img_metas_list]
-            # if not img_metas[0]['prev_bev_exists']:
-            #     prev_bev = ops.zeros((1, 2500, 256), ms.float32)
             img_feats = [each_scale[:, i] for each_scale in img_feats_list]
             prev_bev = self.pts_bbox_head(
                 img_feats, img_metas, prev_bev, indexes[i], reference_points_cam[i], bev_mask[i], shift[i], only_bev=True)
-            # prev_bev = ops.stop_gradient(prev_bev)
+            prev_bev = ops.stop_gradient(prev_bev)
         return prev_bev
 
     def forward_train(self,
-                      points=None,
                       img_metas=None,
                       gt_bboxes_3d=None,
                       gt_labels_3d=None,
-                      gt_labels=None,
-                      gt_bboxes=None,
                       img=None,
                       gt_labels_mask=None,
                       grid_mask_img=None,
