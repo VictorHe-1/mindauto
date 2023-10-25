@@ -5,7 +5,6 @@ import mindspore as ms
 from mindspore import ops
 
 from mindauto.core.bbox.transforms import bbox3d2result
-from mindauto.models.utils.grid_mask import GridMask
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
 from .detectors import MVXTwoStageDetector
 

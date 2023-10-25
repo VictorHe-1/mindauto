@@ -82,7 +82,7 @@ class TemporalSelfAttention(nn.Cell):
             embed_dims * self.num_bev_queue, num_bev_queue * num_heads * num_levels * num_points * 2,
             weight_init='Zero', bias_init='Zero')
         self.attention_weights = nn.Dense(embed_dims * self.num_bev_queue,
-                                           num_bev_queue * num_heads * num_levels * num_points,
+                                          num_bev_queue * num_heads * num_levels * num_points,
                                           weight_init='Zero', bias_init='Zero')
         self.value_proj = nn.Dense(embed_dims, embed_dims, weight_init='XavierUniform', bias_init='Zero')
         self.output_proj = nn.Dense(embed_dims, embed_dims, weight_init='XavierUniform', bias_init='Zero')
@@ -106,20 +106,20 @@ class TemporalSelfAttention(nn.Cell):
         self._is_init = True
 
     def construct(self,
-                query,
-                key=None,
-                value=None,
-                identity=None,
-                query_pos=None,
-                key_padding_mask=None,
-                reference_points=None,
-                spatial_shapes=None,
-                level_start_index=None,
-                key_pos=None,
-                attn_mask=None,
-                bev_mask=None,
-                img_metas=None,
-                flag='decoder'):
+                  query,
+                  key=None,
+                  value=None,
+                  identity=None,
+                  query_pos=None,
+                  key_padding_mask=None,
+                  reference_points=None,
+                  spatial_shapes=None,
+                  level_start_index=None,
+                  key_pos=None,
+                  attn_mask=None,
+                  bev_mask=None,
+                  img_metas=None,
+                  flag='decoder'):
         """Forward Function of MultiScaleDeformAttention.
 
         Args:
@@ -155,8 +155,6 @@ class TemporalSelfAttention(nn.Cell):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-        # if value.sum() == 0:
-        # assert self.batch_first
         is_fisrt_frame = ops.stop_gradient(value.sum() == 0).astype(ms.float32)
         bs, len_bev, c = query.shape
         new_value = ops.stack([query, query], 1).reshape(bs * 2, len_bev, c)
@@ -206,7 +204,9 @@ class TemporalSelfAttention(nn.Cell):
             offset_normalizer = ops.stack(
                 [spatial_shapes_tensor[..., 1], spatial_shapes_tensor[..., 0]], axis=-1).astype(ms.float32)
             # reference_points: (2, 2500, 1, 2)
-            sampling_locations = reference_points[:, :, None, :, None, :] + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
+            sampling_locations = reference_points[:, :, None, :, None, :] \
+                + sampling_offsets \
+                / offset_normalizer[None, None, None, :, None, :]
         elif reference_points.shape[-1] == 4:
             sampling_locations = reference_points[:, :, None, :, None, :2] \
                                  + sampling_offsets / self.num_points \
