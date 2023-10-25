@@ -9,9 +9,10 @@ import mindspore as ms
 with open("./bevformer_mapping.json", "r") as json_file:
     param_name_map = json.load(json_file)
 
-net = torch.load("bevformer_tiny_epoch_24.pth")
+net = torch.load("bevformer_tiny_epoch_24.pth")  # net is a dict
 
-params_dict = net.state_dict()
+# params_dict = net.state_dict()
+params_dict = net['state_dict']
 # conversion
 ms_params = []
 for name, value in params_dict.items():
