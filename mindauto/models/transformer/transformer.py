@@ -11,12 +11,9 @@ from mindspore.ops.function.nn_func import multi_head_attention_forward
 from .temporal_self_attention import TemporalSelfAttention
 from .spatial_cross_attention import MSDeformableAttention3D
 from .decoder import CustomMSDeformableAttention
+from ..utils import rotate
 from common import build_activation_layer, build_dropout
 
-
-# import torch.nn as nn
-# nn.MultiheadAttention
-from ..utils import rotate
 
 
 class _Linear(nn.Dense):
@@ -443,15 +440,7 @@ class PerceptionTransformer(nn.Cell):
                 rotation_angle = img_metas[i]['can_bus'][-1]
                 tmp_prev_bev = prev_bev[:, i].reshape(
                     bev_h, bev_w, -1).permute(2, 0, 1)
-
-                # assert not ops.is_tensor(rotation_angle), f'rotation angle type {type(rotation_angle)}'
-                # assert not ops.is_tensor(self.rotate_center), f'rotation center type {type(self.rotate_center)}'
                 # Warning: this rotation replace the original torchvision.transforms.functional.rotate
-                # tmp_prev_bev = self.rotate_op(tmp_prev_bev, float(rotation_angle),
-                #                       center=self.rotate_center).astype(ms.float32)
-
-                # tmp_prev_bev = self.rotate_op(tmp_prev_bev, 80, (0, 0))
-
                 tmp_prev_bev = rotate(tmp_prev_bev, rotation_angle, self.rotate_center)
                 # tmp_prev_bev = rotate(tmp_prev_bev, 80, (10, 14)).astype(ms.float32)
                 tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
