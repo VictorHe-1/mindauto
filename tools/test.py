@@ -20,7 +20,7 @@ logger = logging.getLogger("mindauto.test")
 
 
 def main(cfg):
-    ms.set_context(mode=cfg.system.mode, device_id=0, pynative_synchronize=True)
+    ms.set_context(mode=cfg.system.mode, device_id=0)  # pynative_synchronize=True
     device_num = None
     rank_id = None
 

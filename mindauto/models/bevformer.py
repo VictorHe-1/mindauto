@@ -418,15 +418,7 @@ class BEVFormer(MVXTwoStageDetector):
         if not self.video_test_mode:
             self.prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # zeros replace None
 
-        # Get the delta of ego position and angle between two timestamps.
-        tmp_pos = img_metas[0][0]['can_bus'][:3].copy()
-        tmp_angle = img_metas[0][0]['can_bus'][-1].copy()
-        if self.prev_bev.sum() != 0.0:  # self.prev_bev is not None
-            img_metas[0][0]['can_bus'][:3] -= self.prev_pos
-            img_metas[0][0]['can_bus'][-1] -= self.prev_angle
-        else:
-            img_metas[0][0]['can_bus'][-1] = 0
-            img_metas[0][0]['can_bus'][:3] = 0
+        img_metas[0][0]['can_bus'] = img_metas[0][0]['can_bus'].astype(ms.float32)
         new_prev_bev, bbox_results = self.simple_test(img_metas[0],
                                                       img[0],
                                                       self.prev_bev,
@@ -436,8 +428,6 @@ class BEVFormer(MVXTwoStageDetector):
                                                       bev_mask,
                                                       shift)
         # During inference, we save the BEV features and ego motion of each timestamp.
-        self.prev_pos = tmp_pos
-        self.prev_angle = tmp_angle
         self.prev_bev = new_prev_bev.permute(1, 0, 2)
         return bbox_results
 

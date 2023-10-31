@@ -96,8 +96,22 @@ class ObtainShift:
         self.grid_length = grid_length
         self.bev_h = bev_h
         self.bev_w = bev_w
+        self.prev_pos = None
+        self.prev_angle = None
 
     def __call__(self, input_dict):
+        tmp_pos = input_dict['img_metas']['can_bus'][:3].copy()
+        tmp_angle = input_dict['img_metas']['can_bus'][-1].copy()
+        if self.prev_pos is None:
+            input_dict['img_metas']['can_bus'][:3] = 0
+        else:
+            input_dict['img_metas']['can_bus'][:3] -= self.prev_pos
+
+        if self.prev_angle is None:
+            input_dict['img_metas']['can_bus'][-1] = 0
+        else:
+            input_dict['img_metas']['can_bus'][-1] -= self.prev_angle
+
         img_metas = [input_dict['img_metas'].copy()]
 
         delta_x = np.array([each['can_bus'][0]
@@ -119,6 +133,8 @@ class ObtainShift:
         shift_x = shift_x * self.use_shift
         shift = np.array([shift_x, shift_y]).transpose(1, 0)  # xy, bs -> bs, xy
 
+        self.prev_pos = tmp_pos
+        self.prev_angle = tmp_angle
         input_dict['shift'] = shift
         return input_dict
 
@@ -501,7 +517,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             if isinstance(data[key], list):  # data['indexes'] is a list
                 data[key] = np.array(data[key])
             if isinstance(data[key], np.ndarray):
-                if data[key].dtype == np.float64:
+                if not key.endswith("can_bus") and data[key].dtype == np.float64:
                     data[key] = data[key].astype(np.float32)
                 if data[key].dtype == np.int64:
                     data[key] = data[key].astype(np.int32)
