@@ -58,34 +58,35 @@ def restore_img_metas(kwargs):
     return img_meta_dict
 
 
-# TODO: modify for new key_list
-def restore_img_metas_for_test(kwargs, new_args):
-    # only support batch_size = 1
-    # type_conversion = {'prev_bev_exists': bool, 'can_bus': np.ndarray,
-    #                     'lidar2img': list, 'scene_token': str, 'box_type_3d: type}
+def restore_img_metas_for_test(kwargs):
     type_mapping = {
         "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": LiDARInstance3DBoxes}
-    key_list = kwargs[-1].asnumpy()[0]
+    key_mapping = {
+        0: 'img_shape',
+        1: 'lidar2img',
+        2: 'box_type_3d',
+        3: 'scene_token',
+        4: 'can_bus'
+    }
     img_meta_dict = {}
-    for key, value in zip(key_list, kwargs[:-1]):
-        if key.startswith("img_metas"):
-            key_list = key.split("/")
-            last_key = key_list[-1]
+    for i, value in enumerate(kwargs):
+        if i < 6:
+            continue
+        else:
+            new_i = (i - 6) % 5
+            last_key = key_mapping[new_i]
             if last_key in ['prev_bev_exists', 'scene_token']:
                 img_meta_dict[last_key] = value.asnumpy().item()
             elif last_key == 'lidar2img':
-                img_meta_dict[last_key] = split_array(value.asnumpy()[0])
+                img_meta_dict[last_key] = ms_split_array(ops.split(value.squeeze(0), 1))
             elif last_key == 'box_type_3d':
                 img_meta_dict[last_key] = type_mapping[value.asnumpy().item()]
             elif last_key == 'img_shape':
-                img_shape = value.asnumpy()[0]
-                img_meta_dict[last_key] = [tuple(each) for each in img_shape]
+                img_shape = value.squeeze(0)
+                img_meta_dict[last_key] = ms_split_array(ops.split(img_shape, 1))
             else:  # can_bus
-                img_meta_dict[last_key] = value.asnumpy()[0]
-        else:
-            if key == 'img':
-                new_args[key] = [value.squeeze(0)]
-    new_args['img_metas'] = [[img_meta_dict]]
+                img_meta_dict[last_key] = value.squeeze(0)
+    return img_meta_dict
 
 
 @ms.jit
@@ -203,6 +204,13 @@ class BEVFormer(MVXTwoStageDetector):
         Returns:
             dict: Losses of each branch.
         """
+        # pts_feats: [Tensor (1, 6, 256, 15, 25)]
+        # img_metas: [Dict]
+        # prev_bev: (1, 2500, 256)
+        # indexes: (6, 2500, 2500)
+        # reference_points_cam: (6, 1, 2500, 4, 2)
+        # bev_mask: (6, 1, 2500, 4)
+        # shift: (1, 2)
         outs = self.pts_bbox_head(
             pts_feats, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift)
         losses = self.pts_bbox_head.loss(gt_bboxes_3d,
@@ -246,10 +254,16 @@ class BEVFormer(MVXTwoStageDetector):
                                       bev_mask=args[7][0],
                                       shift=args[8][0])
         else:
-            new_args = {}
-            new_args['rescale'] = True
-            restore_img_metas_for_test(args, new_args)
-            return self.forward_test(**new_args)
+            img_meta_dict = restore_img_metas_for_test(args)
+            # ['img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift', 'img_metas/img_shape',
+            #  'img_metas/lidar2img', 'img_metas/box_type_3d', 'img_metas/scene_token', 'img_metas/can_bus']
+            return self.forward_test(img=[args[0]],
+                                     img_metas=[[img_meta_dict]],
+                                     rescale=True,
+                                     indexes=args[2][0],
+                                     reference_points_cam=args[3][0],
+                                     bev_mask=args[4][0],
+                                     shift=args[5][0])
 
     # def construct(self,
     #               *args,
@@ -296,7 +310,8 @@ class BEVFormer(MVXTwoStageDetector):
             img_metas = [each[i] for each in img_metas_list]
             img_feats = [each_scale[:, i] for each_scale in img_feats_list]
             prev_bev = self.pts_bbox_head(
-                img_feats, img_metas, prev_bev, indexes[i], reference_points_cam[i], bev_mask[i], shift[i], only_bev=True)
+                img_feats, img_metas, prev_bev, indexes[i], reference_points_cam[i], bev_mask[i], shift[i],
+                only_bev=True)
             prev_bev = ops.stop_gradient(prev_bev)
         return prev_bev
 
@@ -379,7 +394,14 @@ class BEVFormer(MVXTwoStageDetector):
                                             gt_labels_mask[-1])
         return losses_pts
 
-    def forward_test(self, img_metas, img=None, **kwargs):
+    def forward_test(self,
+                     img,
+                     img_metas,
+                     rescale,
+                     indexes,
+                     reference_points_cam,
+                     bev_mask,
+                     shift):
         for var, name in [(img_metas, 'img_metas')]:
             if not isinstance(var, list):
                 raise TypeError('{} must be a list, but got {}'.format(
@@ -388,34 +410,51 @@ class BEVFormer(MVXTwoStageDetector):
 
         if img_metas[0][0]['scene_token'] != self.scene_token:
             # the first sample of each scene is truncated
-            self.prev_bev = None
+            self.prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # zeros replace None
         # update idx
         self.scene_token = img_metas[0][0]['scene_token']
 
         # do not use temporal information
         if not self.video_test_mode:
-            self.prev_bev = None
+            self.prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # zeros replace None
 
         # Get the delta of ego position and angle between two timestamps.
-        tmp_pos = copy.deepcopy(img_metas[0][0]['can_bus'][:3])
-        tmp_angle = copy.deepcopy(img_metas[0][0]['can_bus'][-1])
-        if self.prev_bev is not None:  # self.prev_bev is not None
+        tmp_pos = img_metas[0][0]['can_bus'][:3].copy()
+        tmp_angle = img_metas[0][0]['can_bus'][-1].copy()
+        if self.prev_bev.sum() != 0.0:  # self.prev_bev is not None
             img_metas[0][0]['can_bus'][:3] -= self.prev_pos
             img_metas[0][0]['can_bus'][-1] -= self.prev_angle
         else:
             img_metas[0][0]['can_bus'][-1] = 0
             img_metas[0][0]['can_bus'][:3] = 0
-        new_prev_bev, bbox_results = self.simple_test(
-            img_metas[0], img[0], prev_bev=self.prev_bev, **kwargs)
+        new_prev_bev, bbox_results = self.simple_test(img_metas[0],
+                                                      img[0],
+                                                      self.prev_bev,
+                                                      rescale,
+                                                      indexes,
+                                                      reference_points_cam,
+                                                      bev_mask,
+                                                      shift)
         # During inference, we save the BEV features and ego motion of each timestamp.
         self.prev_pos = tmp_pos
         self.prev_angle = tmp_angle
-        self.prev_bev = new_prev_bev
+        self.prev_bev = new_prev_bev.permute(1, 0, 2)
         return bbox_results
 
-    def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False):
+    def simple_test_pts(self,
+                        x,
+                        img_metas,
+                        prev_bev=None,
+                        rescale=False,
+                        indexes=None,
+                        reference_points_cam=None,
+                        bev_mask=None,
+                        shift=None):
         """Test function"""
-        outs = self.pts_bbox_head(x, img_metas, prev_bev=prev_bev)
+        # ['img_shape', 'lidar2img', 'box_type_3d', 'scene_token', 'can_bus']
+        # outs['bev_embed'] outs['all_cls_scores'] outs['all_bbox_preds']
+        outs = self.pts_bbox_head(
+            x, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift)
         bbox_list = self.pts_bbox_head.get_bboxes(
             outs, img_metas, rescale=rescale)
         bbox_results = [
@@ -424,12 +463,21 @@ class BEVFormer(MVXTwoStageDetector):
         ]
         return outs['bev_embed'], bbox_results
 
-    def simple_test(self, img_metas, img=None, prev_bev=None, rescale=False):
+    def simple_test(self,
+                    img_metas,
+                    img=None,
+                    prev_bev=None,
+                    rescale=False,
+                    indexes=None,
+                    reference_points_cam=None,
+                    bev_mask=None,
+                    shift=None
+                    ):
         """Test function without augmentaiton."""
-        img_feats = self.extract_feat(img=img, img_metas=img_metas)  # TODO
-        bbox_list = [dict() for i in range(len(img_metas))]
+        img_feats = self.extract_feat(img=img, img_metas=img_metas)
+        bbox_list = [dict() for _ in range(len(img_metas))]
         new_prev_bev, bbox_pts = self.simple_test_pts(
-            img_feats, img_metas, prev_bev, rescale=rescale)
+            img_feats, img_metas, prev_bev, rescale, indexes, reference_points_cam, bev_mask, shift)
         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
             result_dict['pts_bbox'] = pts_bbox
         return new_prev_bev, bbox_list

@@ -523,12 +523,12 @@ class MultiScaleFlipAug3D(object):
                                     pcd_vertical_flip
                                 data = run_transforms(_results, transforms=self.transforms)
                                 aug_data.append(data)
-        # list of dict to dict of list
-        aug_data_dict = {key: [] for key in aug_data[0]}
-        for data in aug_data:
-            for key, val in data.items():
-                aug_data_dict[key].append(val)
-        return aug_data_dict
+        # list of dict to dict of list (For batch size > 1)
+        # aug_data_dict = {key: [] for key in aug_data[0]}
+        # for data in aug_data:
+        #     for key, val in data.items():
+        #         aug_data_dict[key].append(val)
+        return aug_data[0]
 
     def __repr__(self):
         """str: Return a string that describes the module."""

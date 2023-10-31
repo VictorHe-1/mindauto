@@ -285,7 +285,6 @@ class BaseTransformerLayer(nn.Cell):
                                                      f'attn_masks {len(attn_masks)} must be equal ' \
                                                      f'to the number of attention in ' \
                                                      f'operation_order {self.num_attn}'
-
         for layer in self.operation_order:
             if layer == 'self_attn':
                 temp_key = temp_value = query

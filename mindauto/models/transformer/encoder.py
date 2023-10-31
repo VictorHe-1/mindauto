@@ -170,7 +170,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
         prev_bev = ops.stack([prev_bev, value_selected], 1).reshape(bs * 2, len_bev, -1)
         hybird_ref_2d = ops.stack([ref_selected, ref_2d], 1).reshape(
             bs * 2, len_bev, num_bev_level, 2)
-
         for lid, layer in enumerate(self.layers):
             output = layer(
                 bev_query,
@@ -308,8 +307,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                                                      f'attn_masks {len(attn_masks)} must be equal ' \
                                                      f'to the number of attention in ' \
                                                      f'operation_order {self.num_attn}'
-
-        for layer in self.operation_order:
+        for layer in self.operation_order:  # ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
             if layer == 'self_attn':  # temporal_self_attention
                 query = self.attentions[attn_index](
                     query,

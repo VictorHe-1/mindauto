@@ -485,8 +485,8 @@ class CustomNuScenesDataset(NuScenesDataset):
 
     def convert_data_to_numpy_test(self, data):
         # convert img_metas to numpy ndarray to fit for ms.GeneratorDataset
-        ordered_key = ['img']
-        for key, value in data['img_metas'][0].items():
+        ordered_key = ['img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift']
+        for key, value in data['img_metas'].items():
             if key in ['can_bus', 'lidar2img', 'scene_token', 'box_type_3d', 'img_shape']:
                 new_key_list = ['img_metas', key]
                 new_key = "/".join(new_key_list)
@@ -498,8 +498,14 @@ class CustomNuScenesDataset(NuScenesDataset):
         data.pop('img_metas')
         numpy_data = []
         for key in ordered_key:
+            if isinstance(data[key], list):  # data['indexes'] is a list
+                data[key] = np.array(data[key])
+            if isinstance(data[key], np.ndarray):
+                if data[key].dtype == np.float64:
+                    data[key] = data[key].astype(np.float32)
+                if data[key].dtype == np.int64:
+                    data[key] = data[key].astype(np.int32)
             numpy_data.append(data[key])
-        numpy_data.append(np.array(ordered_key))
         return tuple(numpy_data)
 
     def __getitem__(self, idx):

@@ -136,7 +136,9 @@ def build_dataset(
                 dataset_config['output_columns'].append(combined_columns)
         dataset_config['output_columns'].extend(['tensor', 'gravity_center'])
     else:
-        dataset_config['output_columns'].pop(0)
+        dataset_config['output_columns'].pop(0)  # delete img_metas
+        dataset_config['output_columns'].pop(0)  # delete img
+        dataset_config['output_columns'].extend(['grid_mask_img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift'])
         for sub_key in ['img_shape', 'lidar2img', 'box_type_3d', 'scene_token', 'can_bus']:
             combined_columns = 'img_metas/'+ sub_key
             dataset_config['output_columns'].append(combined_columns)

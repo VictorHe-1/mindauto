@@ -57,7 +57,6 @@ def main(cfg):
     amp_level = cfg.system.get("amp_level", "O0")
     network = build_model(cfg.model, ckpt_load_path=cfg.eval.ckpt_load_path,
                           amp_level=amp_level)
-    # ms.load_checkpoint(cfg.eval.ckpt_load_path, network)
     network.set_train(False)
     network.img_backbone.train(False)
 

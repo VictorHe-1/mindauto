@@ -182,6 +182,8 @@ class Custom3DDataset(object):
         input_dict = self.get_data_info(index)
         self.pre_pipeline(input_dict)
         example = run_transforms(input_dict, transforms=self.transforms)
+        example = self.get_bev_mask(example)
+        example = self.obtain_shift(example)
         return example
 
     @classmethod
