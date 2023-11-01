@@ -99,18 +99,22 @@ class ObtainShift:
         self.prev_pos = None
         self.prev_angle = None
 
-    def __call__(self, input_dict):
-        tmp_pos = input_dict['img_metas']['can_bus'][:3].copy()
-        tmp_angle = input_dict['img_metas']['can_bus'][-1].copy()
-        if self.prev_pos is None:
-            input_dict['img_metas']['can_bus'][:3] = 0
-        else:
-            input_dict['img_metas']['can_bus'][:3] -= self.prev_pos
+    def __call__(self, input_dict, training=False):
+        if not training:
+            tmp_pos = input_dict['img_metas']['can_bus'][:3].copy()
+            tmp_angle = input_dict['img_metas']['can_bus'][-1].copy()
+            if self.prev_pos is None:
+                input_dict['img_metas']['can_bus'][:3] = 0
+            else:
+                input_dict['img_metas']['can_bus'][:3] -= self.prev_pos
 
-        if self.prev_angle is None:
-            input_dict['img_metas']['can_bus'][-1] = 0
-        else:
-            input_dict['img_metas']['can_bus'][-1] -= self.prev_angle
+            if self.prev_angle is None:
+                input_dict['img_metas']['can_bus'][-1] = 0
+            else:
+                input_dict['img_metas']['can_bus'][-1] -= self.prev_angle
+
+            self.prev_pos = tmp_pos
+            self.prev_angle = tmp_angle
 
         img_metas = [input_dict['img_metas'].copy()]
 
@@ -133,8 +137,6 @@ class ObtainShift:
         shift_x = shift_x * self.use_shift
         shift = np.array([shift_x, shift_y]).transpose(1, 0)  # xy, bs -> bs, xy
 
-        self.prev_pos = tmp_pos
-        self.prev_angle = tmp_angle
         input_dict['shift'] = shift
         return input_dict
 
@@ -323,7 +325,6 @@ class CustomNuScenesDataset(NuScenesDataset):
             if self.use_grid_mask:
                 example = self.grid_mask(example)
             example = self.get_bev_mask(example)
-            example = self.obtain_shift(example)
             gt_labels_3d = example['gt_labels_3d']
             if self.filter_empty_gt and \
                     (example is None or ~(gt_labels_3d != -1).any()):
@@ -339,7 +340,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         indexes_list = [each['indexes'] for each in queue]
         reference_cam_list = [each['reference_points_cam'] for each in queue]
         bev_mask_list = [each['bev_mask'] for each in queue]
-        shift_list = [each['shift'] for each in queue]
+        shift_list = []
         metas_map = {}
         prev_scene_token = None
         prev_pos = None
@@ -361,6 +362,10 @@ class CustomNuScenesDataset(NuScenesDataset):
                 metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
+        for i in range(len(queue)):
+            tmp_dict = {'img_metas': metas_map[i]}
+            tmp_dict = self.obtain_shift(tmp_dict, training=True)
+            shift_list.append(tmp_dict['shift'])
         queue[-1]['img'] = np.stack(imgs_list)
         queue[-1]['gt_labels_mask'] = np.stack(gt_mask_list)
         queue[-1]['grid_mask_img'] = np.stack(grid_imgs_list)
