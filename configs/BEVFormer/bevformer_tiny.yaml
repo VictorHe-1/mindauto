@@ -68,6 +68,7 @@ model:
     norm_eval: True
     style: pytorch
     training_mode: False # set it to True when training
+    ckpt_load_path: ckpts/resnet50_ms.ckpt
   img_neck:
     type: FPN
     in_channels: [2048]
