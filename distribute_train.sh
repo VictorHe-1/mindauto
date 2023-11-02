@@ -1,0 +1,1 @@
+mpirun -n 8 python tools/train.py --config configs/BEVFormer/bevformer_tiny.yaml
