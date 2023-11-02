@@ -1,10 +1,12 @@
 system:
-  mode: 1 # 0 for graph mode, 1 for pynative mode in MindSpore
+  mode: 0 # 0 for graph mode, 1 for pynative mode in MindSpore
   distribute: False
   amp_level: 'O0'
   seed: 0 # BEVFormer seed is 0
   val_while_train: False
   drop_overflow_update: False
+  ckpt_save_policy: top_k
+  ckpt_max_keep: 6
   device_id: 6
   log_interval: 1
 
@@ -67,7 +69,7 @@ model:
       requires_grad: False
     norm_eval: True
     style: pytorch
-    training_mode: False # set it to True when training
+    training_mode: True # set it to True when training
     ckpt_load_path: ckpts/resnet50_ms.ckpt
   img_neck:
     type: FPN
@@ -158,10 +160,6 @@ model:
           weight: 0.0
         pc_range: *point_cloud_range
 
-#metric:
-#  name: DetMetric
-#  main_indicator: f-score
-
 scheduler:
   scheduler: CosineAnnealing
   lr: 2e-4
@@ -214,7 +212,6 @@ train: #  ema: True
           class_names: *class_names
       - CustomCollect3D:
           keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img', 'gt_labels_mask']
-    #  the order of the dataloader list, matching the network input and the input labels for the loss function, and optional data for debug/visualize
     use_grid_mask: True
     classes: *class_names
     modality: *input_modality
@@ -227,7 +224,6 @@ train: #  ema: True
     pc_range: *point_cloud_range
     num_points_in_pillar: 4
     output_columns: [ 'img_metas', 'gt_bboxes_3d', 'gt_labels_3d', 'img', 'gt_labels_mask', 'grid_mask_img', 'max_len', 'indexes', 'reference_points_cam', 'bev_mask', 'shift']
-#    net_input_column_index: [ 0 ] # input indices for network forward func in output_columns
 
   loader:
     shuffle: False
@@ -260,7 +256,6 @@ eval:
                 with_label: False
             - CustomCollect3D:
                 keys: [ 'img' ]
-    #  the order of the dataloader list, matching the network input and the labels for evaluation
     use_grid_mask: True
     bs: 1
     pc_range: *point_cloud_range
