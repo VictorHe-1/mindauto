@@ -24,7 +24,7 @@ def get_warmup_lr(base_lr, cur_iters, warmup, warmup_ratio, warmup_iters):
         warmup_lr = base_lr * warmup_ratio
     elif warmup == 'linear':
         k = (1 - cur_iters / warmup_iters) * (1 -
-                                                warmup_ratio)
+                                              warmup_ratio)
         warmup_lr = base_lr * (1 - k)
     elif warmup == 'exp':
         k = warmup_ratio ** (1 - cur_iters / warmup_iters)
@@ -41,13 +41,34 @@ def cosine_annealing_lr(lr,
                         epochs):
     steps = steps_per_epoch * epochs
     lrs = []
+    base_lr = lr
     target_lr = lr * min_lr_ratio
+    regular_lr = None
     for i in range(steps):
-        curr_iter = i + 1
-        if warmup_iters > 0 and curr_iter < warmup_iters:
-            lr = get_warmup_lr(lr, curr_iter, warmup, warmup_ratio, warmup_iters)
+        curr_iter = i
+        curr_epoch = curr_iter // steps_per_epoch
+        if curr_iter % steps_per_epoch == 0:  # before train epoch
+            regular_lr = annealing_cos(base_lr, target_lr, curr_epoch / epochs)
+        if warmup_iters > 0 and curr_iter < warmup_iters:  # before run iter
+            lr = get_warmup_lr(regular_lr, curr_iter, warmup, warmup_ratio, warmup_iters)
             lrs.append(lr)
         else:
-            curr_epoch = curr_iter // steps_per_epoch
-            lrs.append(annealing_cos(lr, target_lr, curr_epoch / epochs))
+            lrs.append(regular_lr)
     return lrs
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    lrs = cosine_annealing_lr(0.0002,
+                              'linear',
+                              500,
+                              1 / 3,
+                              0.001,
+                              242,
+                              24)
+    x = np.arange(len(lrs))
+    plt.plot(x, lrs)
+    plt.title('lr rate scheduler')
+    plt.show()
