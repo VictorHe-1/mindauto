@@ -2,11 +2,6 @@
 group parameters for setting different weight decay or learning rate for different layers in the network.
 """
 import logging
-from copy import deepcopy
-from typing import Iterable
-
-import mindspore as ms
-from mindspore.nn.learning_rate_schedule import LearningRateSchedule
 
 __all__ = ["create_group_params"]
 
@@ -37,76 +32,25 @@ def grouping_default(params, weight_decay):
     ]
 
 
-def grouping_svtr(params, weight_decay):
-    decay_params = []
-    no_decay_params = []
+def grouping_bevformer_tiny(params, lr):
+    backbone_params = []
+    non_backbone_params = []
 
-    filter_keys = ["norm", "pos_embed"]
+    filter_keys = "img_backbone"
 
     for param in params:
-        filter_param = False
-        for k in filter_keys:
-            # also filter the one dimensional parameters
-            if k in param.name or len(param.shape) == 1:
-                filter_param = True
-                break
-
-        if filter_param:
-            no_decay_params.append(param)
+        if filter_keys in param.name:
+            backbone_params.append(param)
         else:
-            decay_params.append(param)
+            non_backbone_params.append(param)
 
     return [
-        {"params": decay_params, "weight_decay": weight_decay},
-        {"params": no_decay_params},
-        {"order_params": params},
+        {"params": backbone_params, 'lr': lr['img_backbone']},
+        {"params": non_backbone_params, 'lr': lr['model']},
     ]
 
 
-def grouping_visionlan(params, weight_decay, learning_rate, training_step):
-    if training_step == "LF_1" or training_step == "LA":
-        return params
-    elif training_step == "LF_2":
-        # TODO: supports model parallelism in the future
-        mlm = []
-        pre_mlm_pp = []
-        pre_mlm_w = []
-        for param in params:
-            if "MLM_VRM" in param.name:
-                if "MLM_VRM.MLM" in param.name:
-                    # model.head.MLM_VRM.MLM.parameters()
-                    mlm.append(param)
-                elif "MLM_VRM.Prediction.pp_share" in param.name:
-                    # model.head.MLM_VRM.Prediction.pp_share.parameters()
-                    pre_mlm_pp.append(param)
-                elif "MLM_VRM.Prediction.w_share" in param.name:
-                    # model.head.MLM_VRM.Prediction.w_share.parameters()
-                    pre_mlm_w.append(param)
-
-        total_ids = []
-        for param_grps in [mlm, pre_mlm_pp, pre_mlm_w]:
-            for param in param_grps:
-                total_ids.append(id(param))
-        group_base_params = [p for p in params if id(p) in total_ids]
-        group_small_params = [p for p in params if id(p) not in total_ids]
-        base_lr = learning_rate
-        if isinstance(learning_rate, float) or isinstance(learning_rate, ms.Tensor):
-            small_lr = base_lr * 0.1
-        elif isinstance(learning_rate, LearningRateSchedule):
-            small_lr = deepcopy(learning_rate)
-            small_lr.learning_rate = small_lr.learning_rate * 0.1
-        elif isinstance(learning_rate, Iterable):
-            # Iterable
-            small_lr = [x * 0.1 for x in base_lr]
-        return [
-            {"params": group_base_params, "lr": base_lr, "weight_decay": weight_decay},
-            {"params": group_small_params, "lr": small_lr, "weight_decay": weight_decay},
-        ]
-    else:
-        raise ValueError(f"incorrect trainig step {training_step}")
-
-
-def create_group_params(params, weight_decay=0, grouping_strategy=None, no_weight_decay_params=[], **kwargs):
+def create_group_params(params, weight_decay=0, grouping_strategy=None, no_weight_decay_params=[], lr=None, **kwargs):
     """
     create group parameters for setting different weight decay or learning rate for different layers in the network.
 
@@ -135,13 +79,8 @@ def create_group_params(params, weight_decay=0, grouping_strategy=None, no_weigh
                 " no_weight_decay_params={no_weight_decay_params} will not make effect."
             )
 
-        if gp == "svtr":
-            return grouping_svtr(params, weight_decay)
-        elif gp == "visionlan":
-            assert (
-                "lr" in kwargs and "training_step" in kwargs
-            ), "expect to have lr and training step to create group params "
-            return grouping_visionlan(params, weight_decay, kwargs["lr"], kwargs["training_step"])
+        if gp == "bevformer_tiny":
+            return grouping_bevformer_tiny(params, lr)
         elif gp == "filter_norm_and_bias":
             return grouping_default(params, weight_decay)
         else:

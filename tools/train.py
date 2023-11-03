@@ -39,8 +39,7 @@ logger = logging.getLogger("mindauto.train")
 
 def main(cfg):
     # init env
-    ms.set_context(mode=cfg.system.mode, device_target='Ascend')  #  save_graphs=3, save_graphs_path='./debug_ir'
-    # ms.set_context(mode=cfg.system.mode, device_id=1, device_target='Ascend', pynative_synchronize=True)
+    ms.set_context(mode=cfg.system.mode, device_target='Ascend')
     if cfg.system.distribute:
         init()
         device_num = get_group_size()
@@ -105,7 +104,8 @@ def main(cfg):
     # item_list = [item for item in loader_train] item: list[Tensor] 21 elements
     # create model
     amp_level = cfg.system.get("amp_level", "O0")
-    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None), amp_level=amp_level) # TODO: Load Model
+    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None),
+                          amp_level=amp_level)  # TODO: Load Model
     network.init_weights()
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
@@ -116,9 +116,14 @@ def main(cfg):
     # build lr scheduler
     lr_scheduler = create_scheduler(num_batches, **cfg["scheduler"])
     # build optimizer
+    # lr_scheduler: Dict
     cfg.optimizer.update({"lr": lr_scheduler, "loss_scale": optimizer_loss_scale})
     params = create_group_params(network.trainable_params(), **cfg.optimizer)
+
+    # this setting doesn't take effect, just keep it.
+    cfg.optimizer.update({"lr": eval(cfg.scheduler.lr)})
     optimizer = create_optimizer(params, **cfg.optimizer)
+
     # resume ckpt
     start_epoch = 0
     # build train step cell

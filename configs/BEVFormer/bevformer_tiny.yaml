@@ -168,11 +168,15 @@ scheduler:
   warmup_ratio: 1.0/3
   min_lr_ratio: 1e-3
   num_epochs: 24
+  paramwise_cfg:
+    img_backbone:
+      lr_mult: 0.1
 
 optimizer:
   opt: AdamW
   filter_bias_and_bn: False
   weight_decay: 0.01
+  grouping_strategy: bevformer_tiny
 
 # only used for mixed precision training
 loss_scaler:
@@ -201,7 +205,7 @@ train: #  ema: True
       - ObjectNameFilter:
           classes: *class_names
       - PadLabel:
-          padding_size: 350
+          padding_size: 900
           padding_value: 0  # padding value must be in range [0, 9]
       - NormalizeMultiviewImage: *img_norm_cfg
       - RandomScaleImageMultiViewImage:
