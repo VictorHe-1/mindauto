@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import os.path as osp
 import sklearn  # avoid memory allocation bugs
@@ -7,6 +8,9 @@ import logging
 
 import mindspore as ms
 from tqdm import tqdm
+
+__dir__ = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.abspath(os.path.join(__dir__, "..")))
 
 from tools.arg_parser import parse_args_and_config
 args, config = parse_args_and_config()
