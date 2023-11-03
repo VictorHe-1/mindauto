@@ -1,4 +1,4 @@
-mindspore>=2.1.0
+mindspore==2.1.0
 nuscenes-devkit
 trimesh
 addict==2.4.0
