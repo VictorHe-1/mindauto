@@ -497,11 +497,9 @@ class CustomNuScenesDataset(NuScenesDataset):
         numpy_data = []
         for key in ordered_key:
             if data[key].dtype == np.float64:
-                data[key] = data[key].astype(np.float16)
+                data[key] = data[key].astype(np.float32)
             if data[key].dtype == np.int64:
                 data[key] = data[key].astype(np.int32)
-            if data[key].dtype == np.float32:
-                data[key] = data[key].astype(np.float16)
             numpy_data.append(data[key])
         # numpy_data.append(np.array(ordered_key))
         return tuple(numpy_data)
@@ -522,10 +520,10 @@ class CustomNuScenesDataset(NuScenesDataset):
         numpy_data = []
         for key in ordered_key:
             if isinstance(data[key], list):  # data['indexes'] is a list
-                data[key] = np.array(data[key], dtype=np.float16)
+                data[key] = np.array(data[key])
             if isinstance(data[key], np.ndarray):
                 if not key.endswith("can_bus") and data[key].dtype == np.float64:
-                    data[key] = data[key].astype(np.float16)
+                    data[key] = data[key].astype(np.float32)
                 if data[key].dtype == np.int64:
                     data[key] = data[key].astype(np.int32)
             numpy_data.append(data[key])

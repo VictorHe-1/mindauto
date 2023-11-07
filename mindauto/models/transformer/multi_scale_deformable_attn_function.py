@@ -46,7 +46,7 @@ def multi_scale_deformable_attn_pytorch(value, value_spatial_shapes,
     sampling_grid_l_ = ops.flatten(ops.swapaxes(sampling_grids[:, :, :,
                                                 0], 1, 2), start_dim=0, end_dim=1)
     # bs*num_heads, embed_dims, num_queries, num_points
-    sampling_grid_l_ = sampling_grid_l_.astype(ms.float16)
+    sampling_grid_l_ = sampling_grid_l_.astype(value_l_.dtype)
     sampling_value_l_ = ops.grid_sample(
         value_l_,
         sampling_grid_l_,

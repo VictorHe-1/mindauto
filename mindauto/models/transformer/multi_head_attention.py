@@ -21,7 +21,8 @@ class _Linear(nn.Dense):
 def _scaled_dot_product_attention(query, key, value, attn_mask, dropout_p, is_causal, is_training):
     """scaled dot product attention"""
     embed_size = query.shape[-1]
-    scaling_factor = ms.Tensor(embed_size, mstype.float16).sqrt().sqrt()
+    scaling_factor = ms.Tensor(embed_size, mstype.float32).sqrt().sqrt()
+    scaling_factor = scaling_factor.astype(query.dtype)
     query = query / scaling_factor
 
     if is_causal:
@@ -269,34 +270,34 @@ class MindSporeMultiheadAttention(nn.Cell):
 
         if not self._qkv_same_embed_dim:
             self.q_proj_weight = ms.Parameter(
-                init.initializer(init.XavierUniform(), (embed_dim, embed_dim), dtype=ms.float16),
+                init.initializer(init.XavierUniform(), (embed_dim, embed_dim)),
                 'q_proj_weight')
             self.k_proj_weight = ms.Parameter(
-                init.initializer(init.XavierUniform(), (embed_dim, self.kdim), dtype=ms.float16),
+                init.initializer(init.XavierUniform(), (embed_dim, self.kdim)),
                 'k_proj_weight')
             self.v_proj_weight = ms.Parameter(
-                init.initializer(init.XavierUniform(), (embed_dim, self.vdim), dtype=ms.float16),
+                init.initializer(init.XavierUniform(), (embed_dim, self.vdim)),
                 'v_proj_weight')
             self.in_proj_weight = None
         else:
             self.in_proj_weight = ms.Parameter(
-                init.initializer(init.XavierUniform(), (3 * embed_dim, embed_dim), dtype=ms.float16),
+                init.initializer(init.XavierUniform(), (3 * embed_dim, embed_dim)),
                 'in_proj_weight')
             self.q_proj_weight = None
             self.k_proj_weight = None
             self.v_proj_weight = None
 
         if has_bias:
-            self.in_proj_bias = ms.Parameter(init.initializer('zeros', (3 * embed_dim), dtype=ms.float16),
+            self.in_proj_bias = ms.Parameter(init.initializer('zeros', (3 * embed_dim)),
                                              'in_proj_bias')
         else:
             self.in_proj_bias = None
         self.out_proj = _Linear(embed_dim, embed_dim, has_bias=has_bias)
 
         if add_bias_kv:
-            self.bias_k = ms.Parameter(init.initializer(init.XavierNormal(), (1, 1, embed_dim), dtype=ms.float16),
+            self.bias_k = ms.Parameter(init.initializer(init.XavierNormal(), (1, 1, embed_dim)),
                                        'bias_k')
-            self.bias_v = ms.Parameter(init.initializer(init.XavierNormal(), (1, 1, embed_dim), dtype=ms.float16),
+            self.bias_v = ms.Parameter(init.initializer(init.XavierNormal(), (1, 1, embed_dim)),
                                        'bias_v')
         else:
             self.bias_k = self.bias_v = None

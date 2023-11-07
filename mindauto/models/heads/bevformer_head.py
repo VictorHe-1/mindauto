@@ -161,11 +161,12 @@ class BEVFormerHead(DETRHead):
                 Shape [nb_dec, bs, num_query, 9].
         """
         bs, num_cam, _, _, _ = mlvl_feats[0].shape
-        object_query_embeds = self.query_embedding.embedding_table.astype(ms.float16)
-        bev_queries = self.bev_embedding.embedding_table.astype(ms.float16)
+        dtype = mlvl_feats[0].dtype
+        object_query_embeds = self.query_embedding.embedding_table.astype(dtype)
+        bev_queries = self.bev_embedding.embedding_table.astype(dtype)
 
-        new_mask = ops.zeros((bs, self.bev_h, self.bev_w), dtype=ms.float16)
-        bev_pos = self.positional_encoding(new_mask).astype(ms.float16)
+        new_mask = ops.zeros((bs, self.bev_h, self.bev_w)).astype(dtype)
+        bev_pos = self.positional_encoding(new_mask).astype(dtype)
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
             return self.transformer.get_bev_features(
                 mlvl_feats,

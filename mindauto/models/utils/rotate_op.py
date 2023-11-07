@@ -18,7 +18,7 @@ def get_rotate_matrix(center_f, angle, dtype=ms.float32):
          ops.stack([angle_r.sin(), angle_r.cos()])]
     )
     translation = (- rotation + ops.eye(2, 2, dtype)).matmul(ms.Tensor(center_f, dtype))
-    translation = translation.astype(ms.float16)  # added for O2
+    translation = translation.astype(rotation.dtype)
     matrix = ops.concat([rotation, translation.reshape(2, 1)], axis=1) # (2, 3)
     return matrix
 
@@ -53,7 +53,7 @@ def rotate(img, angle, center=Optional[List[int]], interpolation='nearest'):
 
     if need_dim_up:
         img = img.unsqueeze(0)
-    grid = grid.astype(ms.float16)  # added for O2
+    grid = grid.astype(img.dtype)
     sampled_img = grid_sample(img, grid, mode=interpolation, padding_mode="zeros", align_corners=False)
     # aa = torch.nn.functional.grid_sample(torch.from_numpy(img.asnumpy()), torch.from_numpy(grid.asnumpy()), mode=interpolation, padding_mode="zeros", align_corners=False)
     if need_dim_up:

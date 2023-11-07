@@ -144,13 +144,6 @@ class MultiheadAttention(nn.Cell):
             query = query.swapaxes(0, 1)
             key = key.swapaxes(0, 1)
             value = value.swapaxes(0, 1)
-        query = query.astype(ms.float16)
-        key = key.astype(ms.float16)
-        value = value.astype(ms.float16)
-        if attn_mask is not None:
-            attn_mask = attn_mask.astype(ms.float16)
-        if key_padding_mask is not None:
-            key_padding_mask = key_padding_mask.astype(ms.float16)
         out = self.attn(
             query=query,
             key=key,
@@ -413,9 +406,6 @@ class PerceptionTransformer(nn.Cell):
         query = query.permute(1, 0, 2)
         query_pos = query_pos.permute(1, 0, 2)
         bev_embed = bev_embed.permute(1, 0, 2)
-        query = query.astype(ms.float16)
-        bev_embed = bev_embed.astype(ms.float16)
-        query_pos = query_pos.astype(ms.float16)
         inter_states, inter_references = self.decoder(
             query=query,
             key=None,
