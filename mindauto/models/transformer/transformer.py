@@ -1,172 +1,16 @@
 import warnings
-from typing import Optional
-import math
 
 import numpy as np
 from mindspore import nn, ops
 import mindspore as ms
 import mindspore.common.initializer as init
-from mindspore.ops.function.nn_func import multi_head_attention_forward
 
 from .temporal_self_attention import TemporalSelfAttention
 from .spatial_cross_attention import MSDeformableAttention3D
 from .decoder import CustomMSDeformableAttention
+from .multi_head_attention import MindSporeMultiheadAttention
 from ..utils import rotate
 from common import build_activation_layer, build_dropout
-
-
-
-class _Linear(nn.Dense):
-    def __init__(self, in_channels, out_channels, has_bias=True):
-        fan_in, _ = init._calculate_fan_in_and_fan_out((out_channels, in_channels))
-        bound = 1 / math.sqrt(fan_in)
-        super().__init__(in_channels, out_channels, weight_init=init.HeUniform(math.sqrt(5)),
-                         bias_init=init.Uniform(bound), has_bias=has_bias, activation=None)
-
-
-class MindSporeMultiheadAttention(nn.Cell):
-    r"""
-    Adopted from torch.nn.MultiheadAttention
-    Allows the model to jointly attend to information
-    from different representation subspaces.
-    See `Attention Is All You Need <https://arxiv.org/abs/1706.03762>`_
-
-    .. math::
-        \text{MultiHead}(Q, K, V) = \text{Concat}(head_1,\dots,head_h)W^O
-
-    where :math:`head_i = \text{Attention}(QW_i^Q, KW_i^K, VW_i^V)`.
-
-    Args:
-        embed_dim: total dimension of the model.
-        num_heads: parallel attention heads.
-        dropout: a Dropout layer on attn_output_weights. Default: 0.0.
-        bias: add bias as module parameter. Default: True.
-        add_bias_kv: add bias to the key and value sequences at dim=0.
-        add_zero_attn: add a new batch of zeros to the key and
-                       value sequences at dim=1.
-        kdim: total number of features in key. Default: None.
-        vdim: total number of features in value. Default: None.
-        batch_first: If ``True``, then the input and output tensors are provided
-            as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
-
-    Note that if :attr:`kdim` and :attr:`vdim` are None, they will be set
-    to :attr:`embed_dim` such that query, key, and value have the same
-    number of features.
-
-    Examples::
-
-        >>> multihead_attn = nn.MultiheadAttention(embed_dim, num_heads)
-        >>> attn_output, attn_output_weights = multihead_attn(query, key, value)
-    """
-
-    def __init__(self, embed_dim, num_heads, dropout=0., has_bias=True, add_bias_kv=False,
-                 add_zero_attn=False, kdim=None, vdim=None, batch_first=False):
-        super().__init__()
-        self.embed_dim = embed_dim
-        self.kdim = kdim if kdim is not None else embed_dim
-        self.vdim = vdim if vdim is not None else embed_dim
-        self._qkv_same_embed_dim = self.kdim == embed_dim and self.vdim == embed_dim
-
-        self.num_heads = num_heads
-        self.dropout = dropout
-        self.batch_first = batch_first
-        self.head_dim = embed_dim // num_heads
-        if self.head_dim * num_heads != self.embed_dim:
-            raise ValueError("The init argument 'embed_dim' must be divisible by 'num_heads'.")
-
-        if not self._qkv_same_embed_dim:
-            self.q_proj_weight = ms.Parameter(init.initializer(init.XavierUniform(), (embed_dim, embed_dim)),
-                                              'q_proj_weight')
-            self.k_proj_weight = ms.Parameter(init.initializer(init.XavierUniform(), (embed_dim, self.kdim)),
-                                              'k_proj_weight')
-            self.v_proj_weight = ms.Parameter(init.initializer(init.XavierUniform(), (embed_dim, self.vdim)),
-                                              'v_proj_weight')
-            self.in_proj_weight = None
-        else:
-            self.in_proj_weight = ms.Parameter(init.initializer(init.XavierUniform(), (3 * embed_dim, embed_dim)),
-                                               'in_proj_weight')
-            self.q_proj_weight = None
-            self.k_proj_weight = None
-            self.v_proj_weight = None
-
-        if has_bias:
-            self.in_proj_bias = ms.Parameter(init.initializer('zeros', (3 * embed_dim)), 'in_proj_bias')
-        else:
-            self.in_proj_bias = None
-        self.out_proj = _Linear(embed_dim, embed_dim, has_bias=has_bias)
-
-        if add_bias_kv:
-            self.bias_k = ms.Parameter(init.initializer(init.XavierNormal(), (1, 1, embed_dim)), 'bias_k')
-            self.bias_v = ms.Parameter(init.initializer(init.XavierNormal(), (1, 1, embed_dim)), 'bias_v')
-        else:
-            self.bias_k = self.bias_v = None
-
-        self.add_zero_attn = add_zero_attn
-        self.k_is_v = False
-        self.q_is_k = False
-
-    def __call__(self, *args, **kwargs):
-        if len(args) == 0:
-            query = kwargs.get('query')
-            key = kwargs.get('key')
-            value = kwargs.get('value')
-        else:
-            query = kwargs.get('query', args[0])
-            key = kwargs.get('key', args[1])
-            value = kwargs.get('value', args[2])
-        self.k_is_v = key is value
-        self.q_is_k = query is key
-        return super().__call__(*args, **kwargs)
-
-    def construct(self, query: ms.Tensor, key: ms.Tensor, value: ms.Tensor,
-                  key_padding_mask: Optional[ms.Tensor] = None,
-                  need_weights: bool = True, attn_mask: Optional[ms.Tensor] = None, average_attn_weights: bool = True):
-        is_batched = query.ndim == 3
-        if key_padding_mask is not None:
-            _kpm_dtype = key_padding_mask.dtype
-            if _kpm_dtype != ms.bool_ and not ops.is_floating_point(key_padding_mask):
-                raise ValueError(
-                    "only bool and floating types of key_padding_mask are supported")
-
-        if self.batch_first and is_batched:
-            # k_is_v and q_is_k preprocess in __call__ since Graph mode do not support `is`
-            if self.k_is_v:
-                if self.q_is_k:
-                    query = key = value = query.swapaxes(1, 0)
-                else:
-                    query, key = [x.swapaxes(1, 0) for x in (query, key)]
-                    value = key
-            else:
-                query, key, value = [x.swapaxes(1, 0) for x in (query, key, value)]
-
-        if not self._qkv_same_embed_dim:
-            attn_output, attn_output_weights = multi_head_attention_forward(
-                query, key, value, self.embed_dim, self.num_heads,
-                self.in_proj_weight, self.in_proj_bias,
-                self.bias_k, self.bias_v, self.add_zero_attn,
-                self.dropout, self.out_proj.weight, self.out_proj.bias,
-                training=self.training,
-                key_padding_mask=key_padding_mask,
-                attn_mask=attn_mask, use_separate_proj_weight=True,
-                q_proj_weight=self.q_proj_weight, k_proj_weight=self.k_proj_weight,
-                v_proj_weight=self.v_proj_weight, average_attn_weights=average_attn_weights,
-                k_is_v=self.k_is_v, q_is_k=self.q_is_k)
-        else:
-            attn_output, attn_output_weights = multi_head_attention_forward(
-                query, key, value, self.embed_dim, self.num_heads,
-                self.in_proj_weight, self.in_proj_bias,
-                self.bias_k, self.bias_v, self.add_zero_attn,
-                self.dropout, self.out_proj.weight, self.out_proj.bias,
-                training=self.training,
-                key_padding_mask=key_padding_mask,
-                attn_mask=attn_mask, average_attn_weights=average_attn_weights,
-                k_is_v=self.k_is_v, q_is_k=self.q_is_k)
-
-        if self.batch_first and is_batched:
-            attn_output = attn_output.swapaxes(1, 0)
-        if need_weights:
-            return attn_output, attn_output_weights
-        return (attn_output,)
 
 
 class MultiheadAttention(nn.Cell):
@@ -300,6 +144,13 @@ class MultiheadAttention(nn.Cell):
             query = query.swapaxes(0, 1)
             key = key.swapaxes(0, 1)
             value = value.swapaxes(0, 1)
+        query = query.astype(ms.float16)
+        key = key.astype(ms.float16)
+        value = value.astype(ms.float16)
+        if attn_mask is not None:
+            attn_mask = attn_mask.astype(ms.float16)
+        if key_padding_mask is not None:
+            key_padding_mask = key_padding_mask.astype(ms.float16)
         out = self.attn(
             query=query,
             key=key,
@@ -562,6 +413,9 @@ class PerceptionTransformer(nn.Cell):
         query = query.permute(1, 0, 2)
         query_pos = query_pos.permute(1, 0, 2)
         bev_embed = bev_embed.permute(1, 0, 2)
+        query = query.astype(ms.float16)
+        bev_embed = bev_embed.astype(ms.float16)
+        query_pos = query_pos.astype(ms.float16)
         inter_states, inter_references = self.decoder(
             query=query,
             key=None,

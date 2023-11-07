@@ -18,20 +18,20 @@ def get_rotate_matrix(center_f, angle, dtype=ms.float32):
          ops.stack([angle_r.sin(), angle_r.cos()])]
     )
     translation = (- rotation + ops.eye(2, 2, dtype)).matmul(ms.Tensor(center_f, dtype))
+    translation = translation.astype(ms.float16)  # added for O2
     matrix = ops.concat([rotation, translation.reshape(2, 1)], axis=1) # (2, 3)
     return matrix
 
 
 def gen_grid(matrix, h, w, dtype=ms.float32):
     d = 0.5
-    # x_grid = ops.linspace(-w * 0.5 + d, w * 0.5 + d - 1, steps=w)
     x_grid = ops.linspace(ms.Tensor(-w * 0.5 + d, dtype=dtype),
                           ms.Tensor(w * 0.5 + d - 1, dtype=dtype),
                           steps=w)
     y_grid = ops.linspace(ms.Tensor(-h * 0.5 + d, dtype=dtype),
                           ms.Tensor(h * 0.5 + d - 1, dtype=dtype),
                           steps=h)
-    x_mesh, y_mesh = ops.meshgrid(x_grid, y_grid) # (h, w, 2)
+    x_mesh, y_mesh = ops.meshgrid(x_grid, y_grid)  # (h, w, 2)
     ones = ops.ones((h, w), dtype=dtype)
     base_grid = ops.stack([x_mesh, y_mesh, ones], axis=-1)  # (h, w, 3)
     rescaled_theta = ops.swapaxes(matrix, 0, 1) / ms.Tensor([0.5 * w, 0.5 * h], dtype=dtype) # (3, 2)
@@ -53,6 +53,7 @@ def rotate(img, angle, center=Optional[List[int]], interpolation='nearest'):
 
     if need_dim_up:
         img = img.unsqueeze(0)
+    grid = grid.astype(ms.float16)  # added for O2
     sampled_img = grid_sample(img, grid, mode=interpolation, padding_mode="zeros", align_corners=False)
     # aa = torch.nn.functional.grid_sample(torch.from_numpy(img.asnumpy()), torch.from_numpy(grid.asnumpy()), mode=interpolation, padding_mode="zeros", align_corners=False)
     if need_dim_up:

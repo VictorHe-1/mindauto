@@ -129,10 +129,9 @@ class EvalSaveCallback(Callback):
             per_step_time = (time.time() - self.step_start_time) * 1000 / self.log_interval
             fps = self.batch_size * 1000 / per_step_time
             loss = self._loss_avg_meter.val.asnumpy()
-            if isinstance(cur_lr, List):
-                cur_lr = set(cur_lr)
-                cur_lr = cur_lr.pop()  # if group lr, get the first lr
-                lr_str = f"lr_0: {cur_lr:.6f}, "
+            if isinstance(cur_lr, List):  # if group lr, only support 2 group lr
+                assert len(cur_lr) >= 2, "Group lr length should be greater than 2!"
+                lr_str = f"lr_0: {cur_lr[0]:.6f}, lr_1: {cur_lr[-1]:.6f}, "
             else:
                 lr_str = f"lr: {cur_lr:.6f}, "
             msg = (

@@ -173,7 +173,7 @@ class TemporalSelfAttention(nn.Cell):
         result = sum(shape[0] * shape[1] for shape in spatial_shapes)
         assert result == num_value
         assert self.num_bev_queue == 2
-
+        value = value.astype(ms.float16)
         query = ops.cat([value[:bs], query], -1)
         value = self.value_proj(value)
 

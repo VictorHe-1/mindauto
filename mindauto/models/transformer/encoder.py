@@ -168,6 +168,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         value_selected = is_first_frame * prev_bev + (1 - is_first_frame) * bev_query
         ref_selected = is_first_frame * ref_2d + (1 - is_first_frame) * shift_ref_2d
         prev_bev = ops.stack([prev_bev, value_selected], 1).reshape(bs * 2, len_bev, -1)
+        ref_selected = ref_selected.astype(ms.float16)
         hybird_ref_2d = ops.stack([ref_selected, ref_2d], 1).reshape(
             bs * 2, len_bev, num_bev_level, 2)
         for lid, layer in enumerate(self.layers):

@@ -59,8 +59,6 @@ def restore_img_metas(kwargs):
 
 
 def restore_img_metas_for_test(kwargs):
-    type_mapping = {
-        "<class 'mindauto.core.bbox.structures.lidar_box3d.LiDARInstance3DBoxes'>": LiDARInstance3DBoxes}
     key_mapping = {
         0: 'img_shape',
         1: 'lidar2img',
@@ -75,12 +73,12 @@ def restore_img_metas_for_test(kwargs):
         else:
             new_i = (i - 6) % 5
             last_key = key_mapping[new_i]
-            if last_key in ['prev_bev_exists', 'scene_token']:
-                img_meta_dict[last_key] = value.asnumpy().item()
+            if last_key == 'scene_token':
+                img_meta_dict[last_key] = value
             elif last_key == 'lidar2img':
                 img_meta_dict[last_key] = ms_split_array(ops.split(value.squeeze(0), 1))
             elif last_key == 'box_type_3d':
-                img_meta_dict[last_key] = type_mapping[value.asnumpy().item()]
+                img_meta_dict[last_key] = value
             elif last_key == 'img_shape':
                 img_shape = value.squeeze(0)
                 img_meta_dict[last_key] = ms_split_array(ops.split(img_shape, 1))
@@ -380,7 +378,7 @@ class BEVFormer(MVXTwoStageDetector):
         else:
             img_feats = self.extract_feat(img=img, img_metas=img_metas)
         prev_bev_exists = img_metas[0]['prev_bev_exists'].astype(ms.int32)
-        true_prev_bev = prev_bev_exists * prev_bev + (1 - prev_bev_exists) * ops.zeros((1, 2500, 256), ms.float32)
+        true_prev_bev = prev_bev_exists * prev_bev + (1 - prev_bev_exists) * ops.zeros((1, 2500, 256), ms.float16)
         losses_pts = self.forward_pts_train(img_feats,
                                             gt_bboxes_3d,
                                             gt_labels_3d,
@@ -418,7 +416,7 @@ class BEVFormer(MVXTwoStageDetector):
         if not self.video_test_mode:
             self.prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # zeros replace None
 
-        img_metas[0][0]['can_bus'] = img_metas[0][0]['can_bus'].astype(ms.float32)
+        # img_metas[0][0]['can_bus'] = img_metas[0][0]['can_bus'].astype(ms.float32)
         new_prev_bev, bbox_results = self.simple_test(img_metas[0],
                                                       img[0],
                                                       self.prev_bev,
