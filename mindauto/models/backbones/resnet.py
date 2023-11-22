@@ -462,7 +462,6 @@ class ResNet(nn.Cell):
             x = self.conv1(x)  # abs_diff 0.02
             x = self.norm1(x)  # abs_diff 0.0007
             x = self.relu(x)  # abs_diff 0.06
-        x = self.maxpool(x)  # abs_diff 0.007
         x = self.maxpool(x.astype(ms.float16), kernel_size=3, stride=2, padding=1).astype(x.dtype)
         outs = []
         for i, layer_name in enumerate(self.res_layers):

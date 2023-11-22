@@ -1,3 +1,4 @@
+import mindspore as ms
 from mindspore import ops, nn
 
 from .utils import weight_reduce_loss
@@ -108,7 +109,7 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
         """
         if self.use_sigmoid:
             num_classes = pred.shape[1]
-            target = ops.one_hot(target, num_classes, 1, 0)
+            target = ops.one_hot(target.astype(ms.int64), num_classes, 1, 0)  # TODO: fix O2
             loss_cls = self.loss_weight * self.py_sigmoid_focal_loss(
                 pred,
                 target,
