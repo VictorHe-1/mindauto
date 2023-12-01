@@ -1,5 +1,3 @@
-import copy
-
 import numpy as np
 import mindspore as ms
 from mindspore import ops
@@ -137,6 +135,7 @@ class BEVFormer(MVXTwoStageDetector):
         self.scene_token = None
         self.prev_pos = 0
         self.prev_angle = 0
+        self.infer_prev_bev_valid = False
 
     def init_weights(self):
         self.pts_bbox_head.init_weights()
@@ -391,12 +390,14 @@ class BEVFormer(MVXTwoStageDetector):
         if img_metas[0][0]['scene_token'] != self.scene_token:
             # the first sample of each scene is truncated
             self.prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # zeros replace None
+            self.infer_prev_bev_valid = False
         # update idx
         self.scene_token = img_metas[0][0]['scene_token']
 
         # do not use temporal information
         if not self.video_test_mode:
             self.prev_bev = ops.zeros((1, 2500, 256), ms.float32)  # zeros replace None
+            self.infer_prev_bev_valid = False
 
         img_metas[0][0]['can_bus'] = img_metas[0][0]['can_bus'].astype(ms.float32)
         new_prev_bev, bbox_results = self.simple_test(img_metas[0],
@@ -409,6 +410,7 @@ class BEVFormer(MVXTwoStageDetector):
                                                       shift)
         # During inference, we save the BEV features and ego motion of each timestamp.
         self.prev_bev = new_prev_bev.permute(1, 0, 2)
+        self.infer_prev_bev_valid = True
         return bbox_results
 
     def simple_test_pts(self,
@@ -424,7 +426,7 @@ class BEVFormer(MVXTwoStageDetector):
         # ['img_shape', 'lidar2img', 'box_type_3d', 'scene_token', 'can_bus']
         # outs['bev_embed'] outs['all_cls_scores'] outs['all_bbox_preds']
         outs = self.pts_bbox_head(
-            x, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift)
+            x, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift, self.infer_prev_bev_valid)
         bbox_list = self.pts_bbox_head.get_bboxes(
             outs, img_metas, rescale=rescale)
         bbox_results = [
