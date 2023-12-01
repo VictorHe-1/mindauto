@@ -1,6 +1,6 @@
 import warnings
 
-from mindspore import nn
+from mindspore import nn, ops
 
 
 class ResLayer(nn.SequentialCell):
@@ -58,6 +58,7 @@ class ResLayer(nn.SequentialCell):
                 nn.BatchNorm2d(num_features=planes * block.expansion,
                                use_batch_statistics=kwargs['training_mode'])
             ])
+            kwargs['norm_layers'].append(downsample[-1])
             downsample = nn.SequentialCell(*downsample)
 
         layers = []
@@ -120,7 +121,8 @@ class Bottleneck(nn.Cell):
                  dcn=None,
                  plugins=None,
                  init_cfg=None,
-                 training_mode=True):
+                 training_mode=True,
+                 norm_layers=[]):
         """Bottleneck block for ResNet.
 
         If style is "pytorch", the stride-two layer is the 3x3 conv layer, if
@@ -162,7 +164,7 @@ class Bottleneck(nn.Cell):
             self.norm1 = nn.BatchNorm2d(num_features=planes, use_batch_statistics=self.training_mode)
             self.norm2 = nn.BatchNorm2d(num_features=planes, use_batch_statistics=self.training_mode)
             self.norm3 = nn.BatchNorm2d(num_features=planes * self.expansion, use_batch_statistics=self.training_mode)
-
+            norm_layers.extend([self.norm1, self.norm2, self.norm3])
         self.conv1 = nn.Conv2d(
             in_channels=inplanes,
             out_channels=planes,
@@ -318,7 +320,7 @@ class ResNet(nn.Cell):
                             override=dict(name='norm3'))
         else:
             raise TypeError('pretrained must be a str or None')
-
+        self.norm_layers = []
         self.depth = depth
         if stem_channels is None:
             stem_channels = base_channels
@@ -373,7 +375,8 @@ class ResNet(nn.Cell):
                 dcn=dcn,
                 plugins=stage_plugins,
                 init_cfg=block_init_cfg,
-                training_mode=training_mode
+                training_mode=training_mode,
+                norm_layers=self.norm_layers
             )
             self.inplanes = planes * self.block.expansion
             layer_name = f'layer{i + 1}'
@@ -422,6 +425,7 @@ class ResNet(nn.Cell):
                     pad_mode='pad'),
                 nn.BatchNorm2d(num_features=stem_channels),
                 nn.ReLU())
+            self.norm_layers.extend([self.stem[1], self.stem[4], self.stem[7]])
         else:
             self.conv1 = nn.Conv2d(
                 in_channels=in_channels,
@@ -433,7 +437,9 @@ class ResNet(nn.Cell):
                 pad_mode='pad')
             self.norm1 = nn.BatchNorm2d(stem_channels, use_batch_statistics=self.training_mode)
             self.relu = nn.ReLU()
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, pad_mode='pad')
+            self.norm_layers.append(self.norm1)
+        self.pad = nn.Pad(paddings=((0, 0), (0, 0), (1, 1), (1, 1)), mode="CONSTANT")
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, pad_mode='valid')
 
     def _freeze_stages(self):
         if self.frozen_stages >= 0:
@@ -461,7 +467,8 @@ class ResNet(nn.Cell):
             x = self.conv1(x)  # abs_diff 0.02
             x = self.norm1(x)  # abs_diff 0.0007
             x = self.relu(x)  # abs_diff 0.06
-        x = self.maxpool(x)  # abs_diff 0.007
+        x = self.pad(x)
+        x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

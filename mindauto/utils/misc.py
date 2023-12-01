@@ -35,7 +35,8 @@ def fetch_optimizer_lr(opt):
         if opt.is_group_lr:
             lr = ()
             for learning_rate in opt.learning_rate:
-                cur_dynamic_lr = learning_rate(opt.global_step - 1).reshape(())
+                # TODO: For ms2.1: opt.global_step -1 ms2.2: opt.global_step
+                cur_dynamic_lr = learning_rate(opt.global_step).reshape(())
                 lr += (cur_dynamic_lr,)
         else:
             lr = opt.learning_rate(opt.global_step - 1).reshape(())

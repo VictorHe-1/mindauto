@@ -266,7 +266,8 @@ class PerceptionTransformer(nn.Cell):
             indexes=None,
             reference_points_cam=None,
             bev_mask=None,
-            shift=None):
+            shift=None,
+            prev_bev_valid=0):
         """
         obtain bev features.
         """
@@ -324,7 +325,8 @@ class PerceptionTransformer(nn.Cell):
             img_metas,
             indexes,
             reference_points_cam,
-            bev_mask
+            bev_mask,
+            prev_bev_valid
         )
 
         return bev_embed
@@ -342,7 +344,8 @@ class PerceptionTransformer(nn.Cell):
                   indexes=None,
                   reference_points_cam=None,
                   bev_mask=None,
-                  shift=None
+                  shift=None,
+                  prev_bev_valid=0
                   ):
         """Forward function for `Detr3DTransformer`.
         Args:
@@ -392,7 +395,8 @@ class PerceptionTransformer(nn.Cell):
             indexes=indexes,
             reference_points_cam=reference_points_cam,
             bev_mask=bev_mask,
-            shift=shift)  # bev_embed shape: bs, bev_h*bev_w, embed_dims
+            shift=shift,
+            prev_bev_valid=prev_bev_valid)  # bev_embed shape: bs, bev_h*bev_w, embed_dims
 
         bs = mlvl_feats[0].shape[0]
         query_pos, query = ops.split(

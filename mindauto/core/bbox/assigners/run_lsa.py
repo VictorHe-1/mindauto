@@ -7,7 +7,7 @@ from mindspore import Tensor, nn
 class NetLsap(nn.Cell):
     def __init__(self):
         super().__init__()
-        self.op = LinearSumAssignment().set_device(device_target='CPU')
+        self.op = LinearSumAssignment()
 
     def construct(self, cost_matrix, maximize, dimension_limit):
         func_name = 'linear_sum_assignment'

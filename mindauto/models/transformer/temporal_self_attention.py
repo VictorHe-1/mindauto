@@ -115,6 +115,7 @@ class TemporalSelfAttention(nn.Cell):
                   reference_points=None,
                   spatial_shapes=None,
                   level_start_index=None,
+                  prev_bev_valid=0,
                   key_pos=None,
                   attn_mask=None,
                   bev_mask=None,
@@ -155,10 +156,10 @@ class TemporalSelfAttention(nn.Cell):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-        is_fisrt_frame = ops.stop_gradient(value.sum() == 0).astype(ms.float32)
         bs, len_bev, c = query.shape
         new_value = ops.stack([query, query], 1).reshape(bs * 2, len_bev, c)
-        value = is_fisrt_frame * new_value + (1 - is_fisrt_frame) * value
+        if not prev_bev_valid:
+            value = new_value
         if identity is None:
             identity = query
         if query_pos is not None:

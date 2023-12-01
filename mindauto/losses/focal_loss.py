@@ -1,12 +1,10 @@
+import mindspore as ms
 from mindspore import ops, nn
 
-from .utils import weight_reduce_loss
+from .utils import weight_reduce_focal_loss
 
 
-# This method is only for debugging
-
-
-class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
+class FocalLoss(nn.Cell):
     def __init__(self,
                  use_sigmoid=True,
                  gamma=2.0,
@@ -39,8 +37,7 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
                               pred,
                               target,
                               weight=None,
-                              avg_factor=None,
-                              label_mask=None
+                              avg_factor=None
                               ):
         """Mindspore version of `Focal Loss <https://arxiv.org/abs/1708.02002>`_.
 
@@ -63,10 +60,8 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
         pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
         focal_weight = (self.alpha * target + (1 - self.alpha) *
                         (1 - target)) * pt.pow(self.gamma)
-        weight = ops.ones_like(pred)
-        pos_weight = ops.ones_like(pred)
         loss = ops.binary_cross_entropy_with_logits(
-            pred, target, weight, pos_weight, reduction='none') * focal_weight
+            pred, target, ops.ones_like(pred), ops.ones_like(pred), reduction='none') * focal_weight
         if weight is not None:
             if weight.shape != loss.shape:
                 if weight.shape[0] == loss.shape[0]:
@@ -81,15 +76,14 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
                     assert weight.numel() == loss.numel()
                     weight = weight.view(loss.shape[0], -1)
             assert weight.ndim == loss.ndim
-        loss = weight_reduce_loss(loss, label_mask, self.reduction, avg_factor)
+        loss = weight_reduce_focal_loss(loss, weight, self.reduction, avg_factor)
         return loss
 
     def construct(self,
                   pred,
                   target,
                   weight=None,
-                  avg_factor=None,
-                  label_mask=None):
+                  avg_factor=None):
         """Forward function.
 
         Args:
@@ -108,13 +102,16 @@ class FocalLoss(nn.Cell):  # adopted from mmdet.models.losses.focal_loss
         """
         if self.use_sigmoid:
             num_classes = pred.shape[1]
-            target = ops.one_hot(target, num_classes, 1, 0)
+
+            # Bugs of Pynative Mode: ops.one_hot(target.astype(ms.int64), num_classes + 1, 1, 0)
+            target = ops.one_hot(target, num_classes + 1, 1, 0)
+
+            target = target[:, :num_classes]
             loss_cls = self.loss_weight * self.py_sigmoid_focal_loss(
                 pred,
                 target,
                 weight,
-                avg_factor=avg_factor,
-                label_mask=label_mask)
+                avg_factor=avg_factor)
         else:
             raise NotImplementedError
         return loss_cls

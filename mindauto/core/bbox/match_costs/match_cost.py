@@ -115,5 +115,5 @@ class BBox3DL1Cost(nn.Cell):
         Returns:
             torch.Tensor: bbox_cost value with weight
         """
-        bbox_cost = ops.cdist(bbox_pred, gt_bboxes, p=1.0)
+        bbox_cost = ops.cdist(bbox_pred, gt_bboxes, p=1.0)  # ops.cdist has bugs in pynative mode
         return bbox_cost * self.weight

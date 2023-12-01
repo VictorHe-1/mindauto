@@ -6,12 +6,6 @@ from mindauto.core.bbox.util import normalize_bbox
 from mindauto.core.bbox.match_costs import build_match_cost
 
 
-# try:
-#     from scipy.optimize import linear_sum_assignment
-# except ImportError:
-#     linear_sum_assignment = None
-
-
 class HungarianAssigner3D(nn.Cell):
     """Computes one-to-one matching between predictions and ground truth.
     This class computes an assignment between the targets and the predictions
@@ -48,17 +42,6 @@ class HungarianAssigner3D(nn.Cell):
         self.iou_cost = build_match_cost(iou_cost)
         self.pc_range = pc_range
         self.lsap_nn = NetLsap()
-        # self.matched_row_inds = ms.Tensor([[12, 14, 19, 50, 180, 187, 205, 212, 218, 238, 253, 254, 261, 277, 283, 285,
-        #                                     288, 295, 340, 350, 352, 375, 403, 420,
-        #                                     485, 497, 503, 505, 538, 541, 543, 550, 561, 579, 589, 607, 654, 717, 727,
-        #                                     748, 754, 767, 786, 807, 833, 852, 860, 867,
-        #                                     874, 885] + [0 for _ in range(300)]])
-        # self.matched_col_inds = ms.Tensor(
-        #     [[35, 27, 13, 43, 45, 18, 47, 41, 40, 46, 10, 14, 11, 29, 44, 1, 3, 39, 32, 19, 37, 8, 17, 36,
-        #       25, 38, 7, 21, 9, 28, 34, 31, 49, 42, 4, 24, 30, 23, 33, 20, 26, 16, 6, 15, 12, 22, 2, 0,
-        #       5, 48] + [0 for _ in range(300)]])
-        self.matched_row_inds = ms.Tensor([[i for i in range(900)]])
-        self.matched_col_inds = ms.Tensor([[i for i in range(900)]])
 
     def construct(self,
                   bbox_pred,
@@ -98,41 +81,33 @@ class HungarianAssigner3D(nn.Cell):
         """
         assert gt_bboxes_ignore is None, \
             'Only case when gt_bboxes_ignore is None is supported.'
-        # 1. assign -1 by default
-        # assigned_labels = ops.full((num_bboxes,), -1, dtype=ms.int32)
-        # if num_gts == 0 or num_bboxes == 0:
-        #     # No ground truth or boxes, return empty assignment
-        #     if num_gts == 0:
-        #         # No ground truth, assign all to background
-        #         assigned_gt_inds[:] = 0
-        #     return AssignResult(
-        #         num_gts, assigned_gt_inds, None, labels=assigned_labels)
-        # 2. compute the weighted costs
+        # 1. compute the weighted costs
         # classification and bboxcost.
         # cls_cost: FocalLossCost
-        # cls_pred: [900, 10] gt_labels [350]
-        cls_cost = self.cls_cost(cls_pred, gt_labels)  # [900, 350]
+        # cls_pred: [900, 10] gt_labels [padding_dim] cls_cost: [900, padding_dim]
+        cls_cost = self.cls_cost(cls_pred, gt_labels)
+
         # regression L1 cost
-        # normalized_gt_bboxes: [350, 10] [padding_dim, 10]
+        # normalized_gt_bboxes: [padding_dim, 10] [padding_dim, 10]
         normalized_gt_bboxes = normalize_bbox(gt_bboxes, self.pc_range)
-        # bbox_pred: [900, 10] normalized_gt_bboxes[350, 10] -> cost: [900, 350]
+
+        # bbox_pred: [900, 10] normalized_gt_bboxes[padding_dim, 10] -> cost: [900, padding_dim]
         # reg_cost: BBox3DL1Cost
         reg_cost = self.reg_cost(bbox_pred[:, :8], normalized_gt_bboxes[:, :8])
+
         # weighted sum of above two costs
         cost = cls_cost + reg_cost
 
-        # 3. do Hungarian matching on CPU using linear_sum_assignment
-        # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
-        # matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), ms.Tensor(45))
-        # matched_row_inds = ops.stop_gradient(matched_row_inds)
-        # matched_col_inds = ops.stop_gradient(matched_col_inds)
-        # # 4. Get matched bbox_targets and labels
-        #
-        # # Note: matched_col_inds may contain -1
-        # # we multiply it with gt_labels_mask to replace -1 with 0
-        assigned_labels = ops.gather(gt_labels, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0).astype(ms.int32)
-        pos_gt_bboxes = ops.gather(gt_bboxes, self.matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
-        assigned_bbox_pred = ops.gather(bbox_pred, self.matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
-        assigned_cls_pred = ops.gather(cls_pred, self.matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        # 2. do Hungarian matching
+        matched_row_inds, matched_col_inds = self.lsap_nn(cost, ms.Tensor(False), gt_labels_mask.sum().astype(ms.int64))
+        matched_row_inds = ops.stop_gradient(matched_row_inds)
+        matched_col_inds = ops.stop_gradient(matched_col_inds)
 
-        return assigned_cls_pred, assigned_bbox_pred, pos_gt_bboxes, assigned_labels
+        # # 3. Get matched bbox_targets and labels
+        # # Note: matched_col_inds or matched_row_inds may contain -1
+        # # we multiply it with gt_labels_mask to replace -1 with 0
+        assigned_labels = ops.gather(gt_labels, matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0).astype(ms.int32)
+        pos_gt_bboxes = ops.gather(gt_bboxes, matched_col_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        assigned_bbox_pred = ops.gather(bbox_pred, matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        assigned_cls_pred = ops.gather(cls_pred, matched_row_inds[0].astype(ms.int32) * gt_labels_mask, axis=0)
+        return assigned_cls_pred, assigned_bbox_pred, pos_gt_bboxes, assigned_labels, matched_row_inds[0].astype(ms.int32) * gt_labels_mask

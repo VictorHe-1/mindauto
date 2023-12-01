@@ -2,14 +2,12 @@ import numpy as np
 import mindspore as ms
 from mindspore import nn, ops
 import mindspore.common.initializer as init
-from mindspore.communication.management import GlobalComm
 
 from mindauto.core.bbox.coders import build_bbox_coder
 from mindauto.models.transformer import inverse_sigmoid
 from mindauto.core.bbox.util import normalize_bbox
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
 from .detr_head import DETRHead
-from .dist_utils import reduce_mean
 
 
 def bias_init_with_prob(prior_prob):
@@ -143,7 +141,8 @@ class BEVFormerHead(DETRHead):
                   reference_points_cam=None,
                   bev_mask=None,
                   shift=None,
-                  only_bev=False,
+                  prev_bev_valid=0,
+                  only_bev=False
                   ):
         """Forward function.
         Args:
@@ -180,7 +179,8 @@ class BEVFormerHead(DETRHead):
                 indexes,
                 reference_points_cam,
                 bev_mask,
-                shift
+                shift,
+                prev_bev_valid
             )
         else:
             outputs = self.transformer(
@@ -197,12 +197,9 @@ class BEVFormerHead(DETRHead):
                 indexes=indexes,
                 reference_points_cam=reference_points_cam,
                 bev_mask=bev_mask,
-                shift=shift
+                shift=shift,
+                prev_bev_valid=prev_bev_valid
             )
-        # init reference no diff
-        # inter_references abs diff: 0.001
-        # hs abs big diff: 0.04 median: 0.01
-        # bev_embed big diff: 0.01  median: 0.01
         bev_embed, hs, init_reference, inter_references = outputs
         hs = hs.permute(0, 2, 1, 3)
         outputs_classes = []
@@ -286,15 +283,22 @@ class BEVFormerHead(DETRHead):
         """
         num_gt = gt_bboxes.shape[0]
         # assigner and sampler
-        assigned_cls_pred, assigned_bbox_pred, bbox_targets, labels = self.assigner(bbox_pred,
-                                                                                    cls_score,
-                                                                                    gt_bboxes,
-                                                                                    gt_labels,
-                                                                                    gt_bboxes_ignore,
-                                                                                    gt_labels_mask)
-        label_weights = gt_bboxes.new_ones(num_gt)  # 350
-        bbox_weights = ops.ones_like(bbox_pred)[:num_gt, :]  # 350
-        return labels, label_weights, bbox_targets, bbox_weights, gt_labels_mask, assigned_bbox_pred, assigned_cls_pred
+
+        assigned_cls_pred, assigned_bbox_pred, bbox_targets, labels, update_idx = self.assigner(bbox_pred,
+                                                                                                cls_score,
+                                                                                                gt_bboxes,
+                                                                                                gt_labels,
+                                                                                                gt_bboxes_ignore,
+                                                                                                gt_labels_mask)
+        label_weights = gt_bboxes.new_ones(num_gt)
+        bbox_weights = ops.ones_like(bbox_pred)[:num_gt, :]
+
+        paddding_label = (1 - gt_labels_mask) * self.num_classes
+        labels = labels * gt_labels_mask + paddding_label
+        assigned_labels = ops.full((bbox_pred.shape[0], ), self.num_classes, dtype=gt_labels.dtype)
+        assigned_labels = ops.tensor_scatter_elements(assigned_labels, update_idx, labels,axis=0, reduction='none').astype(
+            ms.int32)
+        return assigned_labels, label_weights, bbox_targets, bbox_weights, gt_labels_mask, assigned_bbox_pred, assigned_cls_pred
 
     def get_targets(self,
                     cls_scores_list,
@@ -393,23 +397,20 @@ class BEVFormerHead(DETRHead):
                                            gt_bboxes_ignore_list, gt_labels_mask_list)
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          label_mask_list, bbox_pred_list, cls_pred_list) = cls_reg_targets
-
         labels = ops.cat(labels_list, 0)
         label_weights = ops.cat(label_weights_list, 0)
         bbox_targets = ops.cat(bbox_targets_list, 0)
         bbox_weights = ops.cat(bbox_weights_list, 0)
 
         # classification loss
-        assigned_cls_scores = cls_pred_list[0].reshape(-1, self.cls_out_channels)
-        # construct weighted avg_factor to match with the official DETR repo
-        cls_avg_factor = label_mask_list[0].sum()
-        # if self.sync_cls_avg_factor and GlobalComm.INITED:  # in distribute mode
-        #     cls_avg_factor = reduce_mean(
-        #         ms.Tensor([cls_avg_factor], dtype=cls_scores.dtype))
+        # assigned_cls_scores = cls_pred_list[0].reshape(-1, self.cls_out_channels)
+        assigned_cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
 
+        # construct weighted avg_factor to match with the official DETR repo
+        cls_avg_factor = gt_labels_mask_list.sum()
         cls_avg_factor = max(cls_avg_factor, ms.Tensor(1))
         loss_cls = self.loss_cls(
-            assigned_cls_scores, labels, label_weights, avg_factor=cls_avg_factor, label_mask=label_mask_list[0])  # FocalLoss
+            assigned_cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
 
         # Compute the average number of gt boxes accross all gpus, for
         # normalization purposes
@@ -418,7 +419,6 @@ class BEVFormerHead(DETRHead):
         # regression L1 loss
         assigned_bbox_preds = bbox_pred_list[0].reshape(-1, bbox_preds.shape[-1])
         normalized_bbox_targets = normalize_bbox(bbox_targets, self.pc_range)
-        # isnotnan = ops.isfinite(normalized_bbox_targets).all(axis=-1)
         num_bbox = bbox_weights.shape[0]
         bbox_weights = bbox_weights * ops.tile(self.code_weights, (num_bbox, 1))
         loss_bbox = self.loss_bbox(
@@ -426,7 +426,7 @@ class BEVFormerHead(DETRHead):
             normalized_bbox_targets[..., :10],
             bbox_weights[..., :10],
             avg_factor=num_total_pos,
-            label_mask=label_mask_list[0])  # L1Loss
+            label_mask=label_mask_list[0])
         loss_cls = ops.nan_to_num(loss_cls)
         loss_bbox = ops.nan_to_num(loss_bbox)
         return loss_cls, loss_bbox

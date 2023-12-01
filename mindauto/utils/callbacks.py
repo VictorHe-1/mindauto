@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import copy
 from typing import List, Tuple
 
 import mindspore as ms
@@ -12,7 +13,7 @@ from .evaluator import Evaluator
 from .misc import AllReduce, AverageMeter, fetch_optimizer_lr
 from .recorder import PerfRecorder
 
-__all__ = ["EvalSaveCallback"]
+__all__ = ["EvalSaveCallback", "GetHistoryBEV"]
 _logger = logging.getLogger(__name__)
 
 
@@ -27,28 +28,28 @@ class EvalSaveCallback(Callback):
     """
 
     def __init__(
-        self,
-        network,
-        loader=None,
-        loss_fn=None,
-        metrics=None,
-        pred_cast_fp32=False,
-        rank_id=0,
-        device_num=None,
-        batch_size=20,
-        ckpt_save_dir="./",
-        main_indicator="hmean",
-        ema=None,
-        loader_output_columns=[],
-        input_indices=None,
-        label_indices=None,
-        meta_data_indices=None,
-        val_interval=1,
-        val_start_epoch=1,
-        log_interval=1,
-        ckpt_save_policy="top_k",
-        ckpt_max_keep=10,
-        start_epoch=0,
+            self,
+            network,
+            loader=None,
+            loss_fn=None,
+            metrics=None,
+            pred_cast_fp32=False,
+            rank_id=0,
+            device_num=None,
+            batch_size=20,
+            ckpt_save_dir="./",
+            main_indicator="hmean",
+            ema=None,
+            loader_output_columns=[],
+            input_indices=None,
+            label_indices=None,
+            meta_data_indices=None,
+            val_interval=1,
+            val_start_epoch=1,
+            log_interval=1,
+            ckpt_save_policy="top_k",
+            ckpt_max_keep=10,
+            start_epoch=0,
     ):
         self.rank_id = rank_id
         self.is_main_device = rank_id in [0, None]
@@ -135,9 +136,9 @@ class EvalSaveCallback(Callback):
             else:
                 lr_str = f"lr: {cur_lr:.6f}, "
             msg = (
-                f"epoch: [{cur_epoch}/{cb_params.epoch_num+self.start_epoch}] "
-                f"step: [{cur_step_in_epoch}/{cb_params.batch_num}], "
-                f"loss: {loss:.6f}, " + lr_str + f"per step time: {per_step_time:.3f} ms, fps per card: {fps:.2f} img/s"
+                    f"epoch: [{cur_epoch}/{cb_params.epoch_num + self.start_epoch}] "
+                    f"step: [{cur_step_in_epoch}/{cb_params.batch_num}], "
+                    f"loss: {loss:.6f}, " + lr_str + f"per step time: {per_step_time:.3f} ms, fps per card: {fps:.2f} img/s"
             )
 
             _logger.info(msg)
@@ -175,7 +176,7 @@ class EvalSaveCallback(Callback):
         per_step_time = epoch_time * 1000 / cb_params.batch_num
         fps = 1000 * self.batch_size / per_step_time
         msg = (
-            f"epoch: [{cur_epoch}/{cb_params.epoch_num+self.start_epoch}], loss: {train_loss:.6f}, "
+            f"epoch: [{cur_epoch}/{cb_params.epoch_num + self.start_epoch}], loss: {train_loss:.6f}, "
             f"epoch time: {epoch_time:.3f} s, per step time: {per_step_time:.3f} ms, fps per card: {fps:.2f} img/s"
         )
         _logger.info(msg)
@@ -205,7 +206,7 @@ class EvalSaveCallback(Callback):
         if self.is_main_device:
             # save best models
             if (self.main_indicator == "train_loss" and perf < self.best_perf) or (
-                self.main_indicator != "train_loss" and eval_done and perf > self.best_perf
+                    self.main_indicator != "train_loss" and eval_done and perf > self.best_perf
             ):  # when val_while_train enabled, only find best checkpoint after eval done.
                 self.best_perf = perf
                 # ema weight will be saved if enabled.
@@ -253,3 +254,45 @@ class EvalSaveCallback(Callback):
                 for p, ckpt_name in self.ckpt_manager.get_ckpt_queue():
                     log_str += f"{p:.4f}\t{os.path.join(self.ckpt_save_dir, ckpt_name)}\n"
                 _logger.info(log_str)
+
+
+class GetHistoryBEV(Callback):
+    def __init__(self):
+        super().__init__()
+
+    def on_train_step_begin(self, run_context):
+        """
+        Called before each training step.
+
+        Args:
+            run_context (RunContext): Include some information of the model.
+        """
+        cb_params = run_context.original_args()
+        curr_element = copy.deepcopy(cb_params.train_dataset_element)
+
+        # equal to self.eval()
+        cb_params.train_network.network.set_train(False)
+        cb_params.train_network.network.img_backbone.set_train(False)
+        cb_params.train_network.network.img_neck.set_train(False)
+        cb_params.train_network.network.pts_bbox_head.set_train(False)
+        norm_layers = cb_params.train_network.network.img_backbone.norm_layers
+        for m in norm_layers:
+            m.use_batch_statistics = False
+            m.gamma.requires_grad = False
+            m.beta.requires_grad = False
+
+        prev_bev = cb_params.train_network.network.get_history_bev_for_train(*curr_element)
+
+        # equal to self.train()
+        cb_params.train_network.network.pts_bbox_head.set_train(True)
+        cb_params.train_network.network.img_backbone.set_train(True)
+        cb_params.train_network.network.img_backbone.train(True)
+        cb_params.train_network.network.img_neck.set_train(True)
+        for m in norm_layers:
+            m.use_batch_statistics = False
+            m.gamma.requires_grad = False
+            m.beta.requires_grad = False
+        cb_params.train_network.network.set_train(True)
+
+        # add prev_bev for input
+        cb_params.train_dataset_element.append(prev_bev)

@@ -26,7 +26,7 @@ from mindauto.metrics import build_metric
 from mindauto.models import build_model
 from mindauto.optim import create_group_params, create_optimizer
 from mindauto.scheduler import create_scheduler
-from mindauto.utils.callbacks import EvalSaveCallback
+from mindauto.utils.callbacks import EvalSaveCallback, GetHistoryBEV
 # from mindauto.utils.checkpoint import resume_train_network
 from mindauto.utils.ema import EMA
 from mindauto.utils.logger import set_logger
@@ -150,6 +150,7 @@ def main(cfg):
         metric = build_metric(cfg.metric, device_num=device_num)  # TODO: build metric
 
     # build callbacks
+    get_bev_cb = GetHistoryBEV()
     eval_cb = EvalSaveCallback(
         network,
         loader_eval,
@@ -220,7 +221,7 @@ def main(cfg):
     model.train(
         cfg.scheduler.num_epochs,
         loader_train,
-        callbacks=[eval_cb],
+        callbacks=[get_bev_cb, eval_cb],
         dataset_sink_mode=cfg.train.dataset_sink_mode,
         initial_epoch=start_epoch,
     )

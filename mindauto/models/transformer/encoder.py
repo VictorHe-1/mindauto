@@ -1,7 +1,6 @@
 import copy
 import warnings
 
-import numpy as np
 import mindspore as ms
 from mindspore import ops
 
@@ -125,6 +124,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                   indexes=None,
                   reference_points_cam=None,
                   bev_mask=None,
+                  prev_bev_valid=0,
                   valid_ratios=None):
         """Forward function for `TransformerDecoder`.
         Args:
@@ -163,10 +163,12 @@ class BEVFormerEncoder(TransformerLayerSequence):
         bev_pos = bev_pos.permute(1, 0, 2)
         bs, len_bev, num_bev_level, _ = ref_2d.shape
         prev_bev = prev_bev.permute(1, 0, 2).astype(ms.float32)
-
-        is_first_frame = ops.stop_gradient((prev_bev.sum() == 0).astype(ms.float32))
-        value_selected = is_first_frame * prev_bev + (1 - is_first_frame) * bev_query
-        ref_selected = is_first_frame * ref_2d + (1 - is_first_frame) * shift_ref_2d
+        if prev_bev_valid:
+            value_selected = bev_query
+            ref_selected = shift_ref_2d
+        else:
+            value_selected = prev_bev
+            ref_selected = ref_2d
         prev_bev = ops.stack([prev_bev, value_selected], 1).reshape(bs * 2, len_bev, -1)
         ref_selected = ref_selected.astype(ref_2d.dtype)
         hybird_ref_2d = ops.stack([ref_selected, ref_2d], 1).reshape(
@@ -186,7 +188,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 bev_mask,
                 prev_bev,
                 img_metas,
-                indexes)
+                indexes,
+                prev_bev_valid)
             bev_query = output
             if self.return_intermediate:
                 intermediate.append(output)
@@ -255,6 +258,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                   prev_bev=None,
                   img_metas=None,
                   indexes=None,
+                  prev_bev_valid=0,
                   mask=None,
                   query_pos=None,
                   key_pos=None,
@@ -320,6 +324,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     ref_2d,
                     [[bev_h, bev_w]],
                     ms.Tensor([0]),
+                    prev_bev_valid,
                     key_pos=bev_pos,
                     attn_mask=attn_masks[attn_index],
                     bev_mask=bev_mask,
