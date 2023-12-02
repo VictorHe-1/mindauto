@@ -164,7 +164,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         bs, len_bev, num_bev_level, _ = ref_2d.shape
         prev_bev = prev_bev.permute(1, 0, 2).astype(ms.float32)
         if prev_bev_valid:
-            value_selected = bev_query
+            value_selected = bev_query.astype(prev_bev.dtype)
             ref_selected = shift_ref_2d
         else:
             value_selected = prev_bev
