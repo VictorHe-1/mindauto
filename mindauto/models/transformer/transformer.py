@@ -306,9 +306,9 @@ class PerceptionTransformer(nn.Cell):
             feat_flatten.append(feat)
 
         feat_flatten = ops.cat(feat_flatten, 2)
-        spatial_shapes_tensor = ms.Tensor(spatial_shapes, dtype=ms.int32)
+        spatial_shapes_tensor = ms.Tensor(spatial_shapes)
         level_start_index = ops.cat((spatial_shapes_tensor.new_zeros(
-            (1,)), spatial_shapes_tensor.prod(1).astype(ms.int32).cumsum(0)[:-1].astype(ms.int32)))
+            (1,)).astype(ms.int32), spatial_shapes_tensor.prod(1).astype(ms.int32).cumsum(0)[:-1].astype(ms.int32)))
         feat_flatten = feat_flatten.permute(
             0, 2, 1, 3)  # (num_cam, H*W, bs, embed_dims)
         bev_embed = self.encoder(
