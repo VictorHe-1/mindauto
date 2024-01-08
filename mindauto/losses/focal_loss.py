@@ -104,7 +104,7 @@ class FocalLoss(nn.Cell):
             num_classes = pred.shape[1]
 
             # Bugs of Pynative Mode: ops.one_hot(target.astype(ms.int64), num_classes + 1, 1, 0)
-            target = ops.one_hot(target, num_classes + 1, 1, 0)
+            target = ops.one_hot(target.astype(ms.int64), num_classes + 1, 1, 0)
 
             target = target[:, :num_classes]
             loss_cls = self.loss_weight * self.py_sigmoid_focal_loss(

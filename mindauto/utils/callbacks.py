@@ -5,7 +5,7 @@ import copy
 from typing import List, Tuple
 
 import mindspore as ms
-from mindspore import save_checkpoint
+from mindspore import save_checkpoint, mutable
 from mindspore.train.callback._callback import Callback, _handle_loss
 
 from .checkpoint import CheckpointManager
@@ -281,7 +281,7 @@ class GetHistoryBEV(Callback):
             m.gamma.requires_grad = False
             m.beta.requires_grad = False
 
-        prev_bev = cb_params.train_network.network.get_history_bev_for_train(*curr_element)
+        prev_bev = cb_params.train_network.network.get_history_bev_for_train(*mutable(curr_element))
 
         # equal to self.train()
         cb_params.train_network.network.pts_bbox_head.set_train(True)

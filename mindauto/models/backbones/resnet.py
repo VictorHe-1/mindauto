@@ -1,5 +1,6 @@
 import warnings
 
+import mindspore as ms
 from mindspore import nn, ops
 
 
@@ -438,8 +439,9 @@ class ResNet(nn.Cell):
             self.norm1 = nn.BatchNorm2d(stem_channels, use_batch_statistics=self.training_mode)
             self.relu = nn.ReLU()
             self.norm_layers.append(self.norm1)
-        self.pad = nn.Pad(paddings=((0, 0), (0, 0), (1, 1), (1, 1)), mode="CONSTANT")
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, pad_mode='valid')
+        # self.pad = nn.Pad(paddings=((0, 0), (0, 0), (1, 1), (1, 1)), mode="CONSTANT")
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, pad_mode='valid')
+        self.maxpool = ops.max_pool2d
 
     def _freeze_stages(self):
         if self.frozen_stages >= 0:
@@ -467,8 +469,9 @@ class ResNet(nn.Cell):
             x = self.conv1(x)  # abs_diff 0.02
             x = self.norm1(x)  # abs_diff 0.0007
             x = self.relu(x)  # abs_diff 0.06
-        x = self.pad(x)
-        x = self.maxpool(x)
+        # x = self.pad(x)
+        # x = self.maxpool(x)
+        x = self.maxpool2(x.astype(ms.float16), kernel_size=3, stride=2).astype(x.dtype)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

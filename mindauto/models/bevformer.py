@@ -1,6 +1,6 @@
 import numpy as np
 import mindspore as ms
-from mindspore import ops
+from mindspore import ops, mutable
 
 from mindauto.core.bbox.transforms import bbox3d2result
 from mindauto.core.bbox.structures import LiDARInstance3DBoxes
@@ -156,7 +156,7 @@ class BEVFormer(MVXTwoStageDetector):
         else:
             return None
         if self.with_img_neck:
-            img_feats = self.img_neck(img_feats)
+            img_feats = self.img_neck(mutable(img_feats))
         img_feats_reshaped = []
         for img_feat in img_feats:
             BN, C, H, W = img_feat.shape
@@ -302,7 +302,7 @@ class BEVFormer(MVXTwoStageDetector):
             img_metas = [each[i] for each in img_metas_list]
             img_feats = [each_scale[:, i] for each_scale in img_feats_list]
             prev_bev = self.pts_bbox_head(
-                img_feats, img_metas, prev_bev, indexes[i], reference_points_cam[i], bev_mask[i], shift[i],
+                mutable(img_feats), mutable(img_metas), prev_bev, indexes[i], reference_points_cam[i], bev_mask[i], shift[i],
                 prev_bev_valid=i, only_bev=True)
             prev_bev = ops.stop_gradient(prev_bev)
         return prev_bev
@@ -426,7 +426,7 @@ class BEVFormer(MVXTwoStageDetector):
         # ['img_shape', 'lidar2img', 'box_type_3d', 'scene_token', 'can_bus']
         # outs['bev_embed'] outs['all_cls_scores'] outs['all_bbox_preds']
         outs = self.pts_bbox_head(
-            x, img_metas, prev_bev, indexes, reference_points_cam, bev_mask, shift, self.infer_prev_bev_valid)
+            mutable(x), mutable(img_metas), prev_bev, indexes, reference_points_cam, bev_mask, shift, self.infer_prev_bev_valid)
         bbox_list = self.pts_bbox_head.get_bboxes(
             outs, img_metas, rescale=rescale)
         bbox_results = [
