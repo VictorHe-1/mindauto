@@ -221,8 +221,8 @@ class PadLabel:
         gt_len = len(gt_labels_3d)
         gt_label_mask = np.zeros(self.padding_size)
         gt_label_mask[:gt_len] = 1
-        if self.padding_value not in gt_labels_3d:
-            raise ValueError(f"Padding value {self.padding_value} is not valid!")
+        # if self.padding_value not in gt_labels_3d:
+        #     raise ValueError(f"Padding value {self.padding_value} is not valid!")
         if gt_len:
             gt_labels_3d_pad[:min(gt_len, self.padding_size)] = gt_labels_3d[:min(gt_len, self.padding_size)]
             bboxes_pad[:min(gt_len, self.padding_size)] = gt_bboxes_input[:min(gt_len, self.padding_size)]
